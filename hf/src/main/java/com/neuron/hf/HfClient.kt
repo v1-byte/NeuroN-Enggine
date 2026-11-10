@@ -2,15 +2,20 @@ package com.neuron.hf
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.RandomAccessFile
 import java.net.URLEncoder
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicLong
 
 @Serializable data class HfModel(val id: String, val downloads: Int = 0, val likes: Int = 0, val pipeline_tag: String? = null, val tags: List<String> = emptyList())
 @Serializable data class HfSibling(val rfilename: String, val size: Long? = null)
@@ -22,12 +27,18 @@ import java.security.MessageDigest
 data class DownloadResult(val file: String, val bytes: Long, val ok: Boolean, val error: String? = null, val verified: Boolean = false)
 
 /** Pencarian & unduh dari Hugging Face Hub. Token opsional untuk model gated/privat. */
-class HfClient(private val token: String? = null, private val http: OkHttpClient = OkHttpClient()) {
+class HfClient(
+    private val token: String? = null,
+    private val http: OkHttpClient = OkHttpClient.Builder().dispatcher(Dispatcher().apply {
+        maxRequests = 16
+        maxRequestsPerHost = 16
+    }).build(),
+) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    private fun req(url: String, rangeFrom: Long? = null) = Request.Builder().url(url).apply {
+    private fun req(url: String, rangeFrom: Long? = null, rangeTo: Long? = null) = Request.Builder().url(url).apply {
         token?.let { header("Authorization", "Bearer $it") }
-        rangeFrom?.let { header("Range", "bytes=$it-") }
+        rangeFrom?.let { header("Range", "bytes=$it-${rangeTo ?: ""}") }
     }.build()
 
     private fun encQuery(s: String) = URLEncoder.encode(s, "UTF-8")
@@ -108,6 +119,41 @@ class HfClient(private val token: String? = null, private val http: OkHttpClient
         }
     }
 
+    /**
+     * Download segmented untuk GGUF besar. Memakai delapan koneksi paralel bila server
+     * mendukung Range; fallback ke download biasa ditangani caller saat segmented gagal.
+     * Kecepatan aktual tetap bergantung pada bandwidth, CDN, dan batas server.
+     */
+    private suspend fun downloadParallel(repoId: String, file: String, dest: File, total: Long, onProgress: (Long, Long) -> Unit) = coroutineScope {
+        val url = "https://huggingface.co/$repoId/resolve/main/${encPath(file)}"
+        val parts = 8.coerceAtMost(((total + 32L * 1024 * 1024 - 1) / (32L * 1024 * 1024)).toInt().coerceAtLeast(2))
+        val done = AtomicLong(0L)
+        dest.parentFile?.mkdirs()
+        RandomAccessFile(dest, "rw").use { it.setLength(total) }
+        (0 until parts).map { index ->
+            async(Dispatchers.IO) {
+                val start = total * index / parts
+                val end = total * (index + 1) / parts - 1
+                http.newCall(req(url, start, end)).execute().use { response ->
+                    check(response.code == 206) { "Server tidak mendukung segmented download (HTTP ${response.code})" }
+                    val body = checkNotNull(response.body) { "body kosong" }
+                    RandomAccessFile(dest, "rw").use { raf ->
+                        raf.seek(start)
+                        body.byteStream().use { input ->
+                            val buffer = ByteArray(1 shl 16)
+                            while (true) {
+                                val count = input.read(buffer)
+                                if (count < 0) break
+                                raf.write(buffer, 0, count)
+                                onProgress(done.addAndGet(count.toLong()), total)
+                            }
+                        }
+                    }
+                }
+            }
+        }.awaitAll()
+    }
+
     /** SHA-256 file dalam bentuk heksa huruf kecil. */
     fun sha256(f: File): String {
         val md = MessageDigest.getInstance("SHA-256")
@@ -157,7 +203,17 @@ class HfClient(private val token: String? = null, private val http: OkHttpClient
             onFile(name, i + 1, files.size)
             val dest = File(target, name)
             try {
-                download(repoId, name, dest) { done, total -> onProgress(name, done, total) }
+                val expectedSize = sizes[name] ?: 0L
+                if (expectedSize >= 64L * 1024 * 1024) {
+                    try {
+                        downloadParallel(repoId, name, dest, expectedSize) { done, total -> onProgress(name, done, total) }
+                    } catch (e: Exception) {
+                        dest.delete()
+                        download(repoId, name, dest) { done, total -> onProgress(name, done, total) }
+                    }
+                } else {
+                    download(repoId, name, dest) { done, total -> onProgress(name, done, total) }
+                }
                 val expected = sums[name]
                 if (!verify(dest, expected)) {
                     dest.delete()

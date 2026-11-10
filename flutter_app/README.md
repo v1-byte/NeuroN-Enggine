@@ -48,7 +48,7 @@ flutter_app/
 │  ├─ app/build.gradle                      applicationId, minSdk 26, jniLibs legacy packaging
 │  └─ key.properties                        (tidak di repo) keystore rilis
 ├─ design/                    preview UI v0.2 (mockup ilustratif, JPG)
-├─ pubspec.yaml               nama neuron_engine, versi 0.2.7+9
+├─ pubspec.yaml               nama neuron_engine, versi 0.2.8+10
 └─ analysis_options.yaml      flutter_lints
 ```
 
@@ -63,7 +63,7 @@ flutter_app/
 | Fitur | Tool calling (`current_time`, `calculate`) dan guardrail kata/regex tersambung. Vision, TTS, dan STT belum tersedia sebagai alur UI Flutter |
 | Log | Kejadian nyata dari aplikasi (simpan, chat, error) |
 | Copilot | Meminta saran dan menerapkan patch yang ditinjau tersedia; evaluasi lanjutan dan alur undo/reject bertingkat belum tersedia |
-| Hugging Face | Cari repo GGUF, lihat ukuran file, unduh, progress, cancel, checksum, dan aktivasi model otomatis |
+| Hugging Face | Cari repo GGUF, buka daftar file lewat accordion di tempat yang sama, lihat ukuran, download segmented hingga 8 koneksi untuk file besar, progress, cancel, checksum, dan aktivasi model otomatis |
 | Latih | Pilih model lokal atau impor GGUF, upload model ke trainer, validasi dataset, start/progres/log/stop/sambung, unduh ZIP/LoRA GGUF; split train/val dan ON_DEVICE belum tersedia |
 | Server | Pengaturan port/key, pembuatan key acak 256-bit, konfirmasi risiko HTTP, start/stop/status tersedia; inbound tetap HTTP tanpa TLS |
 | Data & RAG | Impor dokumen, indeks SQLite, retrieval chat tersedia; hapus dokumen/progres belum ada |

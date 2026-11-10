@@ -339,8 +339,38 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
       TextField(controller: _hfToken, obscureText: true, decoration: const InputDecoration(labelText: 'Token HF (opsional)', hintText: 'hf_…')),
       Align(alignment: Alignment.centerLeft, child: TextButton(onPressed: _busy ? null : () => _run(() async { await Bridge.saveHfToken(_hfToken.text.trim()); setState(() => _status = 'Token disimpan terenkripsi.'); }), child: const Text('Simpan token'))),
       Row(children: [Expanded(child: TextField(controller: _query, onSubmitted: (_) => _searchHf(), decoration: const InputDecoration(labelText: 'Cari model', hintText: 'llama 3 gguf'))), const SizedBox(width: 8), IconButton.filled(onPressed: _busy ? null : _searchHf, icon: const Icon(Icons.search))]),
-      if (_models.isNotEmpty) ...[const SizedBox(height: 8), for (final model in _models) ListTile(dense: true, contentPadding: EdgeInsets.zero, title: Text('${model['id']}', style: const TextStyle(fontSize: 12)), subtitle: Text('Unduhan ${model['downloads'] ?? 0} · likes ${model['likes'] ?? 0}', style: const TextStyle(color: muted, fontSize: 10)), trailing: const Icon(Icons.chevron_right), onTap: _busy ? null : () => _selectRepo('${model['id']}'))],
-      if (_repoSelected != null) ...[const Divider(), Text('File GGUF · $_repoSelected', style: const TextStyle(fontWeight: FontWeight.bold)), const Text('Ukuran file ditampilkan sebelum unduh agar mudah memilih model yang muat di perangkat.', style: TextStyle(color: muted, fontSize: 10)), for (final file in _files) ListTile(dense: true, contentPadding: EdgeInsets.zero, title: Text('${file['name']}', style: const TextStyle(fontSize: 11)), subtitle: Text('Ukuran: ${_bytes(file['size'])}', style: const TextStyle(color: muted, fontSize: 10)), trailing: IconButton(tooltip: 'Unduh file ini', onPressed: _busy ? null : () => _download(_repoSelected!, '${file['name']}'), icon: const Icon(Icons.download, color: purple)))],
+      if (_models.isNotEmpty) ...[
+        const SizedBox(height: 10),
+        const Align(alignment: Alignment.centerLeft, child: Text('Pilih repository model', style: TextStyle(fontWeight: FontWeight.w700))),
+        const SizedBox(height: 4),
+        const Text('Ketuk baris repository untuk membuka daftar file GGUF di tempat ini. Tidak perlu berpindah halaman.', style: TextStyle(color: muted, fontSize: 10)),
+        const SizedBox(height: 6),
+        for (final model in _models) Card(
+          color: panel2,
+          margin: const EdgeInsets.only(bottom: 6),
+          child: ExpansionTile(
+            key: PageStorageKey('hf-repo-${model['id']}'),
+            initiallyExpanded: _repoSelected == model['id'],
+            leading: const Icon(Icons.model_training_outlined, color: purple),
+            title: Text('${model['id']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            subtitle: Text('Unduhan ${model['downloads'] ?? 0} · likes ${model['likes'] ?? 0}', style: const TextStyle(color: muted, fontSize: 10)),
+            onExpansionChanged: (open) {
+              if (open && !_busy && _repoSelected != model['id']) _selectRepo('${model['id']}');
+            },
+            children: [
+              if (_repoSelected == model['id'] && _files.isEmpty) const Padding(padding: EdgeInsets.all(12), child: Align(alignment: Alignment.centerLeft, child: Text('Memuat file GGUF…', style: TextStyle(color: muted, fontSize: 11)))),
+              if (_repoSelected == model['id']) for (final file in _files) ListTile(
+                dense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                leading: const Icon(Icons.insert_drive_file_outlined, size: 20, color: blue),
+                title: Text('${file['name']}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11)),
+                subtitle: Text('Ukuran: ${_bytes(file['size'])}', style: const TextStyle(color: muted, fontSize: 10)),
+                trailing: FilledButton.icon(onPressed: _busy ? null : () => _download('${model['id']}', '${file['name']}'), icon: const Icon(Icons.download, size: 15), label: const Text('Unduh', style: TextStyle(fontSize: 10))),
+              ),
+            ],
+          ),
+        ),
+      ],
       if (_downloadId != null) ...[
         const SizedBox(height: 10),
         Builder(builder: (_) {

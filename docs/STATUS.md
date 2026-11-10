@@ -12,6 +12,7 @@
 - [x] Layar Flutter aktif: chat API/LOCAL, model lokal bersyarat native library, Hugging Face search/download dengan progress, impor dan indexing RAG, Copilot suggestion/patch review, serta kontrol server lokal.
 - [x] Import model lokal menampilkan daftar GGUF tersimpan beserta ukuran/status aktif; file dari Download/internal storage disalin ke ruang aplikasi. Unduhan HF mengaktifkan model setelah selesai.
 - [x] Auto-update APK memeriksa GitHub Releases, menampilkan ukuran asset, dan membuka installer Android setelah konfirmasi pengguna.
+- [x] HF model picker memakai accordion repository/file di tempat yang sama; GGUF besar memakai segmented HTTP Range hingga delapan koneksi paralel dengan fallback otomatis.
 - [x] Training remote sederhana mendukung LoRA/QLoRA; model GGUF dari ruang aplikasi atau file eksternal diunggah otomatis ke endpoint `/models` trainer sebelum job dimulai.
 - [~] Import multi-select/review, URL/cloud storage/transfer LAN, split train/val, grafik loss, serta ON_DEVICE belum tersedia. Training remote tahap awal sudah memiliki impor/validasi dataset, konfigurasi, job/progres, stop/sambung, dan unduhan adapter; belum dikompilasi atau diuji pada perangkat/server.
 - [~] Build APK dan test Android belum diverifikasi di lingkungan audit ini karena Flutter/Android SDK tidak tersedia. Jangan menganggap rilis siap sebelum job GitHub Actions dan uji perangkat lulus.
