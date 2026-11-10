@@ -187,10 +187,45 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
       await _open(_chatPath);
       await _refreshEngine();
       await _refreshDashboardData();
+      await _maybeCheckUpdate();
     } catch (e) {
       _log('ERROR', 'Proyek tidak bisa dibuka: $e');
       toast('Proyek tidak bisa dibuka');
     }
+  }
+
+  Future<void> _maybeCheckUpdate() async {
+    try {
+      final update = await Bridge.checkForUpdate();
+      if (!mounted || update['available'] != true) return;
+      final tag = '${update['tag'] ?? 'versi baru'}';
+      final size = _formatBytes(update['size']);
+      final install = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Update NeuroN tersedia'),
+              content: Text('Rilis $tag${size.isEmpty ? '' : ' · $size'} tersedia dari GitHub Releases. Unduh dan lanjutkan ke installer Android?'),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Nanti')),
+                FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Unduh & pasang')),
+              ],
+            ),
+          ) ??
+          false;
+      if (!install || !mounted) return;
+      toast('Mengunduh update…');
+      await Bridge.downloadAndInstallUpdate('${update['url']}');
+    } catch (e) {
+      _log('WARN', 'Pemeriksaan update dilewati: $e');
+    }
+  }
+
+  String _formatBytes(dynamic value) {
+    final n = value is num ? value.toDouble() : 0;
+    if (n <= 0) return '';
+    if (n >= 1e9) return '${(n / 1e9).toStringAsFixed(1)} GB';
+    if (n >= 1e6) return '${(n / 1e6).toStringAsFixed(0)} MB';
+    return '${(n / 1e3).toStringAsFixed(0)} KB';
   }
 
   // ---------- Utilitas ----------

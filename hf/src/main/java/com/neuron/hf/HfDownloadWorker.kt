@@ -27,6 +27,7 @@ class HfDownloadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker
         const val KEY_DONE = "done"
         const val KEY_TOTAL = "total"
         const val KEY_OUT = "out"
+        const val KEY_MODEL = "model"
         const val KEY_ERROR = "error"
         private const val CHANNEL = "hf_download"
         private const val NOTIF_ID = 4101
@@ -76,7 +77,10 @@ class HfDownloadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker
             )
             val failed = results.firstOrNull { !it.ok }
             when {
-                failed == null -> Result.success(workDataOf(KEY_OUT to HfClient.targetDir(base, repoId).absolutePath))
+                failed == null -> Result.success(workDataOf(
+                    KEY_OUT to HfClient.targetDir(base, repoId).absolutePath,
+                    KEY_MODEL to File(HfClient.targetDir(base, repoId), files.first()).absolutePath,
+                ))
                 runAttemptCount + 1 < MAX_ATTEMPTS -> Result.retry()
                 else -> Result.failure(workDataOf(KEY_ERROR to "${failed.file}: ${failed.error ?: "gagal"}"))
             }

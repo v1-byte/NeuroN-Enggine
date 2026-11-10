@@ -290,10 +290,8 @@ class _TrainingPageState extends State<TrainingPage> {
             DropdownButton<String>(
               value: _method,
               items: const [
-                DropdownMenuItem(value: 'LORA', child: Text('LoRA')),
-                DropdownMenuItem(value: 'QLORA', child: Text('QLoRA')),
-                DropdownMenuItem(value: 'FULL_FINETUNE', child: Text('Full fine-tune')),
-                DropdownMenuItem(value: 'DPO', child: Text('DPO')),
+                DropdownMenuItem(value: 'LORA', child: Text('LoRA · sederhana')),
+                DropdownMenuItem(value: 'QLORA', child: Text('QLoRA · hemat VRAM')),
               ],
               onChanged: _busy ? null : (value) async {
                 if (value == null) return;
@@ -356,7 +354,7 @@ class _TrainingPageState extends State<TrainingPage> {
 
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        _card('Training remote', 'Training berjalan di server NeuroN Trainer, bukan di perangkat ini. Target ON_DEVICE belum tersedia di UI karena binary finetune belum diverifikasi.', icon: Icons.school_outlined,
+        _card('Training sederhana', 'Pilih dataset JSONL/CSV, isi server dan model dasar, lalu jalankan LoRA/QLoRA. Training berjalan di server NeuroN Trainer, bukan di perangkat ini.', icon: Icons.school_outlined,
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               _field('URL server trainer', _url, hint: 'https://host.example atau http://IP:PORT'),
               _field('API key server (disimpan terenkripsi)', _apiKey, hint: _keyConfigured ? 'Key sudah tersimpan; kosongkan untuk mempertahankan' : 'Opsional sesuai konfigurasi server', secret: true),
@@ -365,10 +363,8 @@ class _TrainingPageState extends State<TrainingPage> {
                 value: _method,
                 decoration: const InputDecoration(labelText: 'Metode'),
                 items: const [
-                  DropdownMenuItem(value: 'LORA', child: Text('LoRA')),
-                  DropdownMenuItem(value: 'QLORA', child: Text('QLoRA')),
-                  DropdownMenuItem(value: 'FULL_FINETUNE', child: Text('Full fine-tune')),
-                  DropdownMenuItem(value: 'DPO', child: Text('DPO')),
+                  DropdownMenuItem(value: 'LORA', child: Text('LoRA · sederhana')),
+                  DropdownMenuItem(value: 'QLORA', child: Text('QLoRA · hemat VRAM')),
                 ],
                 onChanged: (value) async {
                   if (value == null) return;
@@ -383,8 +379,8 @@ class _TrainingPageState extends State<TrainingPage> {
               _field('Epoch', _epochs, keyboardType: TextInputType.number),
               _field('Batch size', _batch, keyboardType: TextInputType.number),
               _field('Learning rate', _learningRate, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
-              _field('LoRA rank', _rank, keyboardType: TextInputType.number),
-              _field('LoRA alpha', _alpha, keyboardType: TextInputType.number),
+              _field('LoRA rank', _rank, keyboardType: TextInputType.number, hint: '8'),
+              _field('LoRA alpha', _alpha, keyboardType: TextInputType.number, hint: '16'),
               Align(alignment: Alignment.centerLeft, child: OutlinedButton.icon(onPressed: _busy ? null : _save, icon: const Icon(Icons.save_outlined), label: const Text('Simpan konfigurasi'))),
               const SizedBox(height: 8),
               const Text('Perhatian: training mengunggah dataset dan nama model ke server yang dikonfigurasi. Hindari data sensitif; gunakan HTTPS untuk rilis.', style: TextStyle(color: muted, fontSize: 11, height: 1.35)),

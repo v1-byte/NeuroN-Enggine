@@ -17,6 +17,8 @@ cd flutter_app
 flutter build apk --release
 ```
 - Keluaran: `flutter_app/build/app/outputs/flutter-apk/app-release.apk`. Untuk distribusi, ganti namanya menjadi `NeuroN-Engine-release.apk`.
+- Auto-update membaca GitHub Release terbaru dari `v1-byte/NeuroN-Enggine` dan mencari asset `.apk`. Asset pertama yang berakhiran `.apk` diunduh setelah konfirmasi pengguna lalu dibuka melalui Android Package Installer. Karena Android tetap meminta persetujuan instalasi, fitur ini bukan instalasi diam-diam.
+- Saat menerbitkan release, unggah tepat satu APK produksi yang sudah ditandatangani (workflow menghasilkan nama `NeuroN-Engine-<tag>-universal-release-signed.apk`) agar auto-update tidak memilih asset yang salah. Jangan unggah debug APK sebagai asset release.
 - Build lokal tanpa `key.properties` masih dapat memakai signing debug (`flutter_app/android/app/build.gradle`) untuk uji lokal saja. Jangan distribusikan APK tersebut.
 - Versi diambil dari `flutter_app/pubspec.yaml` (`version: 0.2.4+6` → versionName `0.2.4`, versionCode `6`).
 - Minifikasi R8 dan resource shrinking dimatikan pada build alpha karena beberapa dependency opsional mereferensikan kelas yang tidak disediakan Android; lakukan audit keep rules sebelum mengaktifkannya lagi.
@@ -89,7 +91,8 @@ Alur yang bisa diuji saat ini:
 2. Tombol **Rapikan**, **Cari dan ganti**, dan status bar `JSON valid` / `JSON error`.
 3. Muat file JSON dari perangkat, lalu simpan lewat dialog sistem.
 4. Chat API-compatible, streaming, stop, riwayat Activity, dan pengaturan engine.
-5. Model GGUF, Knowledge/RAG, Server lokal, dan Hugging Face melalui layar Tools; inferensi lokal memerlukan library native yang sesuai ABI.
+5. Model GGUF dapat diimpor dari Download/internal storage, dikelola dari daftar model lokal, dan diaktifkan kembali tanpa memilih ulang. Layar Hugging Face menampilkan ukuran file sebelum unduh dan mengaktifkan model setelah unduhan selesai.
+6. Knowledge/RAG, Server lokal, Hugging Face, serta training sederhana LoRA/QLoRA melalui layar Tools; inferensi lokal memerlukan library native yang sesuai ABI.
 
 Uji pada perangkat nyata tetap wajib untuk memeriksa picker/import, chat, server/RAG/HF, layout pada ukuran layar berbeda, serta operasi model. Inferensi lokal dan training ON_DEVICE memerlukan binary native dan harus dinyatakan belum tersedia bila binary tidak disertakan.
 
@@ -105,6 +108,7 @@ Uji pada perangkat nyata tetap wajib untuk memeriksa picker/import, chat, server
 - [ ] Matriks RAM (bagian 4) diisi untuk 6, 8, dan 12 GB
 - [ ] `mapping.txt` disimpan (jika R8 aktif)
 - [ ] Keystore, `key.properties`, dan password tidak masuk ke repo atau artefak
+- [ ] Asset release hanya berisi APK produksi yang akan dipilih auto-update
 - [ ] `docs/STATUS.md` diperbarui
 
 ## 7. Yang belum tersedia

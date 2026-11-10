@@ -67,6 +67,12 @@ class HfClient(private val token: String? = null, private val http: OkHttpClient
             .toMap()
     }
 
+    suspend fun fileSizes(repoId: String): Map<String, Long> = withContext(Dispatchers.IO) {
+        getJson("https://huggingface.co/api/models/$repoId/tree/main?recursive=true") { json.decodeFromString<List<HfTreeEntry>>(it) }
+            .mapNotNull { entry -> entry.size?.let { entry.path to it } }
+            .toMap()
+    }
+
     /**
      * Unduh satu file dengan resume (HTTP Range). onProgress(bytesDone, total; total = -1 jika tidak diketahui).
      * Server mengabaikan Range (balas 200): file ditulis ulang dari awal. 416 (sudah lengkap): dianggap sukses.

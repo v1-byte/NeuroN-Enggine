@@ -8,5 +8,6 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         NeuronBridge.register(flutterEngine.dartExecutor.binaryMessenger, applicationContext)
+        UpdateBridge.register(flutterEngine.dartExecutor.binaryMessenger, applicationContext)
     }
 }

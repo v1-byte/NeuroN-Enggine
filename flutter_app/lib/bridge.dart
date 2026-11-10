@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 ///  - neuron/chat     -> android/app/src/main/kotlin/com/neuron/engine/NeuronBridge.kt
 const _project = MethodChannel('neuron/project');
 const _chat = EventChannel('neuron/chat');
+const _update = MethodChannel('neuron/update');
 
 class EngineSettings {
   const EngineSettings({this.baseUrl = '', this.model = '', this.apiKey = '', this.mode = 'API', this.modelPath = '', this.nativeAvailable = false});
@@ -120,6 +121,15 @@ class Bridge {
       Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>(
               'setLocalModel', {'path': path}) ??
           const {});
+  static Future<List<Map<String, dynamic>>> localModels() async =>
+      (await _project.invokeListMethod<dynamic>('localModels') ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+  static Future<Map<String, dynamic>> activateLocalModel(String path) async =>
+      Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>(
+              'activateLocalModel', {'path': path}) ??
+          const {});
   static Future<Map<String, dynamic>> serverState() async =>
       Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>(
               'serverState') ??
@@ -203,6 +213,15 @@ class Bridge {
   }
   static Future<Map<String, dynamic>> trainingDownloadAdapter(String id, {required bool gguf}) async =>
       Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>('trainingDownloadAdapter', {'id': id, 'gguf': gguf}) ?? const {});
+
+  static Future<Map<String, dynamic>> checkForUpdate() async =>
+      Map<String, dynamic>.from(await _update.invokeMapMethod<String, dynamic>(
+              'checkForUpdate') ??
+          const {});
+  static Future<Map<String, dynamic>> downloadAndInstallUpdate(String url) async =>
+      Map<String, dynamic>.from(await _update.invokeMapMethod<String, dynamic>(
+              'downloadAndInstallUpdate', {'url': url}) ??
+          const {});
 
   static Future<Map<String, String>> loadDrafts() async {
     final m = await _project.invokeMapMethod<String, dynamic>('loadDrafts');

@@ -98,6 +98,8 @@ internal object ProjectBridge {
                 }
                 "setEngineMode" -> reply(scope, result) { setEngineMode(app, str(a, "mode")) }
                 "setLocalModel" -> reply(scope, result) { setLocalModel(app, str(a, "path")) }
+                "localModels" -> reply(scope, result) { localModels(app) }
+                "activateLocalModel" -> reply(scope, result) { activateLocalModel(app, str(a, "path")) }
                 "serverState" -> reply(scope, result) { serverState(app) }
                 "saveServer" -> reply(scope, result) { saveServer(app, (a["port"] as? Number)?.toInt() ?: 8080, str(a, "apiKey")) }
                 "generateServerKey" -> reply(scope, result) { generateServerKey() }
@@ -212,6 +214,36 @@ internal object ProjectBridge {
         return mapOf("path" to target.absolutePath, "nativeAvailable" to LlamaCppEngine.available)
     }
 
+    private fun modelDir(ctx: Context): File =
+        (ctx.getExternalFilesDir("models") ?: File(ctx.filesDir, "models")).apply { mkdirs() }
+
+    private fun localModels(ctx: Context): List<Map<String, Any>> {
+        val dir = modelDir(ctx)
+        val active = ProjectStore.load(ctx).files.modelPath
+        return dir.walkTopDown().filter { it.isFile && it.extension.equals("gguf", true) }
+            .sortedBy { it.name.lowercase() }
+            .map { file ->
+                mapOf(
+                    "name" to file.name,
+                    "path" to file.absolutePath,
+                    "size" to file.length(),
+                    "active" to (file.absolutePath == active),
+                )
+            }.toList()
+    }
+
+    private fun activateLocalModel(ctx: Context, path: String): Map<String, Any> {
+        val file = File(path).canonicalFile
+        val root = modelDir(ctx).canonicalFile
+        require(file.isFile && file.extension.equals("gguf", true) &&
+            (file.path == root.path || file.path.startsWith(root.path + File.separator))) {
+            "Model harus berada di penyimpanan NeuroN dan berformat .gguf"
+        }
+        val p = ProjectStore.load(ctx)
+        ProjectStore.save(ctx, p.copy(engine = p.engine.copy(mode = EngineMode.LOCAL), files = p.files.copy(modelPath = file.absolutePath)))
+        return mapOf("path" to file.absolutePath, "nativeAvailable" to LlamaCppEngine.available)
+    }
+
     private fun serverState(ctx: Context): Map<String, Any?> {
         val state = LocalServerService.state.value
         val prefs = ServerPrefs(ctx)
@@ -269,8 +301,10 @@ internal object ProjectBridge {
     }
 
     private fun hfFiles(ctx: Context, repo: String): List<Map<String, Any?>> = runBlocking(Dispatchers.IO) {
-        HfClient(HfPrefs(ctx).token).detail(repo).siblings.filter { it.rfilename.endsWith(".gguf", true) }.map {
-            mapOf("name" to it.rfilename, "size" to it.size)
+        val client = HfClient(HfPrefs(ctx).token)
+        val sizes = runCatching { client.fileSizes(repo) }.getOrDefault(emptyMap())
+        client.detail(repo).siblings.filter { it.rfilename.endsWith(".gguf", true) }.map {
+            mapOf("name" to it.rfilename, "size" to (it.size ?: sizes[it.rfilename] ?: 0L))
         }
     }
 
@@ -308,6 +342,7 @@ internal object ProjectBridge {
             "done" to p.getLong(HfDownloadWorker.KEY_DONE, 0L),
             "total" to p.getLong(HfDownloadWorker.KEY_TOTAL, -1L),
             "path" to (out.getString(HfDownloadWorker.KEY_OUT) ?: ""),
+            "modelPath" to (out.getString(HfDownloadWorker.KEY_MODEL) ?: ""),
             "error" to (out.getString(HfDownloadWorker.KEY_ERROR) ?: ""),
         )
     }

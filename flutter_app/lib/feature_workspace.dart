@@ -27,6 +27,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
   bool _showServerKey = false;
   List<Map<String, dynamic>> _models = [];
   List<Map<String, dynamic>> _files = [];
+  List<Map<String, dynamic>> _localModels = [];
   Map<String, dynamic> _server = {};
   Map<String, dynamic> _rag = {};
   String? _repoSelected;
@@ -41,6 +42,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
     super.initState();
     if (widget.page == 'Server') _loadServer();
     if (widget.page == 'Data & RAG') _loadRag();
+    if (widget.page == 'Model lokal') _loadLocalModels();
   }
 
   @override
@@ -95,6 +97,24 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
     });
   }
 
+  Future<void> _loadLocalModels() async {
+    try {
+      final models = await Bridge.localModels();
+      if (mounted) setState(() => _localModels = models);
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Model lokal belum dapat dimuat: $e');
+    }
+  }
+
+  Future<void> _activateLocalModel(String path) async => _run(() async {
+        final result = await Bridge.activateLocalModel(path);
+        await _loadLocalModels();
+        setState(() => _status = result['nativeAvailable'] == true
+            ? 'Model aktif. Mode lokal siap digunakan.'
+            : 'Model aktif, tetapi library native belum tersedia pada APK ini.');
+        widget.onLog('INFO', 'Model lokal diaktifkan: $path');
+      });
+
   Future<void> _searchHf() async => _run(() async {
     final found = await Bridge.hfSearch(_query.text.trim());
     setState(() { _models = found; _files = []; _repoSelected = null; });
@@ -129,6 +149,11 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
     if (status == 'succeeded' || status == 'failed' || status == 'cancelled') {
       _downloadPoll?.cancel();
       _downloadId = null;
+      final modelPath = state['modelPath']?.toString() ?? '';
+      if (status == 'succeeded' && modelPath.isNotEmpty) {
+        await Bridge.activateLocalModel(modelPath);
+        await _loadLocalModels();
+      }
       setState(() => _status = status == 'succeeded' ? 'Unduhan selesai: ${state['path']}' : status == 'cancelled' ? 'Unduhan dibatalkan.' : 'Unduhan gagal: ${state['error']}');
     }
   }
@@ -240,9 +265,26 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
   Widget _message() => _status.isEmpty ? const SizedBox.shrink() : Container(width: double.infinity, margin: const EdgeInsets.only(top: 10), padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: panel2, borderRadius: BorderRadius.circular(9)), child: SelectableText(_status, style: const TextStyle(fontSize: 11, height: 1.4)));
 
   Widget _localPage() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    _card('LLama.cpp lokal', 'Pilih file GGUF dari perangkat. File disalin ke penyimpanan privat aplikasi dan chat beralih ke mode lokal.', icon: Icons.phone_android_outlined, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      FilledButton.icon(onPressed: _busy ? null : _pickLocalModel, icon: const Icon(Icons.folder_open), label: const Text('Pilih model GGUF')),
-      const SizedBox(height: 8), const Text('Catatan: inferensi memerlukan libneuron_llama.so yang dibangun untuk ABI perangkat. Model besar dapat membutuhkan RAM dan waktu muat yang tinggi.', style: TextStyle(fontSize: 11, color: muted)),
+    _card('Model lokal', 'Impor GGUF dari Download atau penyimpanan internal. File disalin ke ruang aplikasi agar tetap tersedia, lalu Anda dapat mengaktifkan model tanpa memilih ulang.', icon: Icons.phone_android_outlined, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        FilledButton.icon(onPressed: _busy ? null : _pickLocalModel, icon: const Icon(Icons.file_upload_outlined), label: const Text('Impor file GGUF')),
+        OutlinedButton.icon(onPressed: _busy ? null : _loadLocalModels, icon: const Icon(Icons.refresh), label: const Text('Segarkan')),
+      ]),
+      const SizedBox(height: 12),
+      if (_localModels.isEmpty) const Text('Belum ada model lokal. Gunakan Impor file GGUF atau unduh model dari Hugging Face.', style: TextStyle(fontSize: 12, color: muted))
+      else ...[
+        const Text('Model tersimpan', style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 6),
+        for (final model in _localModels) Card(color: panel2, child: ListTile(
+          dense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+          leading: Icon(model['active'] == true ? Icons.check_circle : Icons.memory_outlined, color: model['active'] == true ? Colors.greenAccent : purple),
+          title: Text('${model['name']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+          subtitle: Text('${_bytes(model['size'])} · ${model['active'] == true ? 'aktif' : 'tersedia'}', style: const TextStyle(fontSize: 10, color: muted)),
+          trailing: model['active'] == true ? const Text('AKTIF', style: TextStyle(fontSize: 9, color: Colors.greenAccent, fontWeight: FontWeight.bold)) : TextButton(onPressed: _busy ? null : () => _activateLocalModel('${model['path']}'), child: const Text('Pakai')),
+        )),
+      ],
+      const SizedBox(height: 8), const Text('Inferensi memerlukan libneuron_llama.so untuk ABI perangkat. Model besar membutuhkan ruang penyimpanan dan RAM yang cukup.', style: TextStyle(fontSize: 11, color: muted)),
     ])), _message(),
   ]);
 
@@ -287,7 +329,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
       Align(alignment: Alignment.centerLeft, child: TextButton(onPressed: _busy ? null : () => _run(() async { await Bridge.saveHfToken(_hfToken.text.trim()); setState(() => _status = 'Token disimpan terenkripsi.'); }), child: const Text('Simpan token'))),
       Row(children: [Expanded(child: TextField(controller: _query, onSubmitted: (_) => _searchHf(), decoration: const InputDecoration(labelText: 'Cari model', hintText: 'llama 3 gguf'))), const SizedBox(width: 8), IconButton.filled(onPressed: _busy ? null : _searchHf, icon: const Icon(Icons.search))]),
       if (_models.isNotEmpty) ...[const SizedBox(height: 8), for (final model in _models) ListTile(dense: true, contentPadding: EdgeInsets.zero, title: Text('${model['id']}', style: const TextStyle(fontSize: 12)), subtitle: Text('Unduhan ${model['downloads'] ?? 0} · likes ${model['likes'] ?? 0}', style: const TextStyle(color: muted, fontSize: 10)), trailing: const Icon(Icons.chevron_right), onTap: _busy ? null : () => _selectRepo('${model['id']}'))],
-      if (_repoSelected != null) ...[const Divider(), Text('File GGUF · $_repoSelected', style: const TextStyle(fontWeight: FontWeight.bold)), for (final file in _files) ListTile(dense: true, contentPadding: EdgeInsets.zero, title: Text('${file['name']}', style: const TextStyle(fontSize: 11)), subtitle: Text(_bytes(file['size']), style: const TextStyle(color: muted, fontSize: 10)), trailing: IconButton(tooltip: 'Unduh file ini', onPressed: _busy ? null : () => _download(_repoSelected!, '${file['name']}'), icon: const Icon(Icons.download, color: purple)))],
+      if (_repoSelected != null) ...[const Divider(), Text('File GGUF · $_repoSelected', style: const TextStyle(fontWeight: FontWeight.bold)), const Text('Ukuran file ditampilkan sebelum unduh agar mudah memilih model yang muat di perangkat.', style: TextStyle(color: muted, fontSize: 10)), for (final file in _files) ListTile(dense: true, contentPadding: EdgeInsets.zero, title: Text('${file['name']}', style: const TextStyle(fontSize: 11)), subtitle: Text('Ukuran: ${_bytes(file['size'])}', style: const TextStyle(color: muted, fontSize: 10)), trailing: IconButton(tooltip: 'Unduh file ini', onPressed: _busy ? null : () => _download(_repoSelected!, '${file['name']}'), icon: const Icon(Icons.download, color: purple)))],
       if (_downloadId != null) ...[
         const SizedBox(height: 10),
         Builder(builder: (_) {
