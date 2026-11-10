@@ -41,6 +41,16 @@ ThemeData neuronTheme([NeuronThemePreset preset = NeuronThemePreset.midnight]) {
     useMaterial3: true,
     fontFamily: 'Roboto',
     dividerColor: line,
+    navigationBarTheme: NavigationBarThemeData(
+      indicatorColor: accent.withOpacity(.22),
+      iconTheme: WidgetStatePropertyAll(IconThemeData(color: accent)),
+      labelTextStyle: WidgetStatePropertyAll(TextStyle(color: accent, fontSize: 11)),
+    ),
+    textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: accent)),
+    outlinedButtonTheme: OutlinedButtonThemeData(style: OutlinedButton.styleFrom(foregroundColor: accent, side: BorderSide(color: accent))),
+    checkboxTheme: CheckboxThemeData(fillColor: WidgetStatePropertyAll(accent)),
+    sliderTheme: SliderThemeData(activeTrackColor: accent, thumbColor: accent, overlayColor: accent.withOpacity(.18)),
+    progressIndicatorTheme: ProgressIndicatorThemeData(color: accent, linearTrackColor: line),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: ink,

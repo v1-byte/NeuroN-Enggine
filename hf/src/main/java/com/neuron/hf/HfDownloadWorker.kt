@@ -35,7 +35,7 @@ class HfDownloadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker
 
         fun uniqueName(repoId: String) = "hf-download-$repoId"
 
-        /** Antrekan unduhan; satu repo hanya satu unduhan aktif (KEEP). */
+        /** Antrekan unduhan; satu repo/file hanya satu unduhan aktif. */
         fun enqueue(ctx: Context, repoId: String, files: List<String>): UUID {
             val input = Data.Builder()
                 .putString(KEY_REPO, repoId)
@@ -45,7 +45,7 @@ class HfDownloadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker
                 .setInputData(input)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .build()
-            WorkManager.getInstance(ctx).enqueueUniqueWork(uniqueName(repoId), ExistingWorkPolicy.KEEP, req)
+            WorkManager.getInstance(ctx).enqueueUniqueWork(uniqueName(repoId), ExistingWorkPolicy.REPLACE, req)
             return req.id
         }
     }

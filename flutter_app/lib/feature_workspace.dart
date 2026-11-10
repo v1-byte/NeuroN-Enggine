@@ -133,6 +133,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
       final started = await Bridge.hfStartDownload(repo, file);
       _downloadId = started['id']?.toString();
       if (_downloadId == null) throw Exception('ID unduhan tidak tersedia');
+      _downloadState = <String, dynamic>{'state': 'enqueued', 'file': file, 'done': 0, 'total': -1};
       setState(() => _status = 'Unduhan berjalan di background…');
       _downloadPoll?.cancel();
       _downloadPoll = Timer.periodic(const Duration(milliseconds: 500), (_) => _pollDownload());
@@ -142,7 +143,13 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
   Future<void> _pollDownload() async {
     final id = _downloadId;
     if (id == null) return;
-    final state = await Bridge.hfDownloadState(id);
+    Map<String, dynamic> state;
+    try {
+      state = await Bridge.hfDownloadState(id);
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Status unduhan sementara tidak tersedia: $e');
+      return;
+    }
     if (!mounted) return;
     setState(() => _downloadState = state);
     final status = state['state']?.toString();
@@ -151,8 +158,12 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
       _downloadId = null;
       final modelPath = state['modelPath']?.toString() ?? '';
       if (status == 'succeeded' && modelPath.isNotEmpty) {
-        await Bridge.activateLocalModel(modelPath);
-        await _loadLocalModels();
+        try {
+          await Bridge.activateLocalModel(modelPath);
+          await _loadLocalModels();
+        } catch (e) {
+          if (mounted) setState(() => _status = 'Unduhan selesai, tetapi model belum bisa diaktifkan: $e');
+        }
       }
       setState(() => _status = status == 'succeeded' ? 'Unduhan selesai: ${state['path']}' : status == 'cancelled' ? 'Unduhan dibatalkan.' : 'Unduhan gagal: ${state['error']}');
     }

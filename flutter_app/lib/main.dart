@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_pages.dart';
 import 'bridge.dart';
@@ -26,13 +27,32 @@ class _NeuraAppState extends State<NeuraApp> {
   NeuronThemePreset _theme = NeuronThemePreset.midnight;
 
   @override
+  void initState() {
+    super.initState();
+    _restoreTheme();
+  }
+
+  Future<void> _restoreTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    final index = prefs.getInt('neuron_theme_preset');
+    if (!mounted || index == null || index < 0 || index >= NeuronThemePreset.values.length) return;
+    setState(() => _theme = NeuronThemePreset.values[index]);
+  }
+
+  Future<void> _changeTheme(NeuronThemePreset value) async {
+    setState(() => _theme = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('neuron_theme_preset', value.index);
+  }
+
+  @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'NeuroN Engine',
         debugShowCheckedModeBanner: false,
         theme: neuronTheme(_theme),
         home: NeuraHome(
           themePreset: _theme,
-          onThemeChanged: (value) => setState(() => _theme = value),
+          onThemeChanged: _changeTheme,
         ),
       );
 }
