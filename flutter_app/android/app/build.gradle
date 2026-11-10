@@ -58,6 +58,9 @@ android {
 
     buildTypes {
         release {
+            // APK alpha tetap utuh/universal; minifikasi ditunda sampai aturan R8 semua dependency diuji.
+            minifyEnabled false
+            shrinkResources false
             // Tanpa key.properties: pakai signing debug. Cukup untuk uji lokal, JANGAN untuk distribusi.
             signingConfig(keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug)
         }
