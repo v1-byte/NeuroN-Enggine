@@ -2,7 +2,7 @@
 
 Ini adalah UI Android NeuroN Engine. Shell dan state aplikasi berada di `lib/main.dart`; halaman utama berada di `lib/app_pages.dart`. Proyek ini adalah entry point APK (`applicationId` `com.neuron.engine`). Dokumentasi lengkap repo ada di [../README.md](../README.md). Catatan migrasi ada di [../docs/MIGRASI_FLUTTER.md](../docs/MIGRASI_FLUTTER.md).
 
-> **Status: UI 0.2.4 alpha.** Shell mobile-first menggantikan tampilan editor-first dan rail kiri lama. Beranda, Chat, Library, Import Center, Activity, serta Workspace tersedia; editor konfigurasi tetap berada di Lainnya → Workspace. Workflow GitHub Actions membangun APK universal pada rilis. APK CI memakai debug signing dan minifikasi ditunda; bukan untuk distribusi produksi.
+> **Status: UI 0.2.5 alpha.** Shell mobile-first menggantikan tampilan editor-first dan rail kiri lama. Beranda, Chat, Library, Import Center, Activity, serta Workspace tersedia; editor konfigurasi tetap berada di Lainnya → Workspace. APK release telah dibangun dengan JNI llama.cpp arm64. APK CI memakai debug signing tanpa keystore privat dan minifikasi ditunda; bukan untuk distribusi produksi.
 
 ## Menjalankan
 
@@ -17,7 +17,7 @@ flutter build apk --release     # perlu android/key.properties, lihat ../docs/RE
 flutter analyze
 ```
 
-Build lokal belum dapat dijalankan di lingkungan dokumentasi ini karena Flutter/Dart dan Android SDK tidak terpasang. Untuk memeriksa status build rilis, lihat workflow **Build and publish Android APK** pada GitHub Actions.
+Build lokal terverifikasi dengan Flutter 3.24.5, Android SDK 35, NDK 27, dan JDK 17. Untuk build engine lokal, gunakan `ORG_GRADLE_PROJECT_withNative=true`; workflow **Build and publish Android APK** sudah mengaktifkan flag tersebut.
 
 ## Struktur
 

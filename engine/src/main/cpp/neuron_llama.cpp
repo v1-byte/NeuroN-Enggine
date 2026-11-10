@@ -87,7 +87,6 @@ JNIEXPORT jlong JNICALL Java_com_neuron_engine_LlamaCppEngine_nativeLoad(
     gpuLayers = 0;
 #endif
     mp.n_gpu_layers = gpuLayers;
-    mp.use_mmap = true;
     llama_model* model = llama_model_load_from_file(path.c_str(), mp);
     if (!model) { throw_java(env, "Gagal memuat model (file rusak / bukan GGUF / RAM kurang): " + path); return 0; }
 
@@ -194,7 +193,8 @@ JNIEXPORT void JNICALL Java_com_neuron_engine_LlamaCppEngine_nativeGenerate(
         llama_sampler_chain_add(smpl.get(), llama_sampler_init_logit_bias(llama_vocab_n_tokens(H->vocab), nb, bias.data()));
     }
     if (repeat != 1.f || freq != 0.f || presence != 0.f)
-        llama_sampler_chain_add(smpl.get(), llama_sampler_init_penalties(64, repeat, freq, presence));
+        llama_sampler_chain_add(smpl.get(), llama_sampler_init_penalties(
+            llama_vocab_n_tokens(H->vocab), 64, repeat, freq, presence));
     const bool penalties = (repeat != 1.f || freq != 0.f || presence != 0.f);
     if (temp <= 0.f) {
         llama_sampler_chain_add(smpl.get(), llama_sampler_init_greedy());

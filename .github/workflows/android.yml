@@ -12,6 +12,8 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      ORG_GRADLE_PROJECT_withNative: 'true'
     steps:
       - uses: actions/checkout@v4
         with:

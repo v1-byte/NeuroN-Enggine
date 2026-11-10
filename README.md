@@ -6,7 +6,7 @@
 
 **NeuroN Engine** adalah engine AI lokal untuk Android. Aplikasi ini menjalankan model GGUF di perangkat (llama.cpp), atau memakai API OpenAI-compatible, lalu menyediakan konfigurasi model, RAG, server lokal OpenAI-compatible, copilot untuk memperbaiki konfigurasi, dan pelatihan LoRA lewat server Python.
 
-> **Status: alpha (v0.2.4).** UI Flutter memakai shell mobile-first Beranda/Chat/Library/Import/Lainnya; editor lama hanya tersedia sebagai Workspace tanpa rail IDE permanen. GitHub Actions membangun APK universal pada rilis. Tanpa keystore privat, APK memakai debug signing dan hanya layak untuk uji instalasi, bukan distribusi produksi. Minifikasi ditunda sampai aturan R8 dependency divalidasi. Beberapa alur import/training belum tersedia dan inferensi lokal memerlukan library llama.cpp native yang sesuai ABI. Lihat [Status fitur](#status-fitur), [ringkasan perubahan UI](docs/UI_REFRESH.md), dan [docs/RELEASE.md](docs/RELEASE.md).
+> **Status: alpha (v0.2.5).** UI Flutter memakai shell mobile-first Beranda/Chat/Library/Import/Lainnya; editor lama hanya tersedia sebagai Workspace tanpa rail IDE permanen. APK release telah memuat `libneuron_llama.so` arm64 dan diuji build, analyzer, unit test, serta signature APK v2. Tanpa keystore privat, APK memakai debug signing dan hanya layak untuk uji instalasi, bukan distribusi produksi. Minifikasi ditunda sampai aturan R8 dependency divalidasi. Beberapa alur import/training belum tersedia. Lihat [Status fitur](#status-fitur), [ringkasan perubahan UI](docs/UI_REFRESH.md), dan [docs/RELEASE.md](docs/RELEASE.md).
 
 ---
 
@@ -57,9 +57,9 @@ UI Android sebelumnya ditulis dengan Jetpack Compose di modul `app/`. Sejak 2026
 
 - **Entry point APK** sekarang proyek Flutter. Modul `app/` Compose dihapus. Modul itu sudah tidak punya layar UI sejak sebelum migrasi.
 - **Modul Kotlin library** (`model`, `project`, `hf`, `engine`, `rag`, `train`, `server`, `copilot`) dan **`python/`** tidak berubah.
-- **Identitas seragam:** applicationId `com.neuron.engine`, nama aplikasi "NeuroN Engine", versi `0.2.4+6`.
+- **Identitas seragam:** applicationId `com.neuron.engine`, nama aplikasi "NeuroN Engine", versi `0.2.5+7`.
 - **Logo** dikompres dari 415 KB menjadi sekitar 73 KB total dan dipakai sebagai header serta ikon launcher adaptif.
-- **Flutter** tersambung ke project dan modul Kotlin untuk chat API, mode lokal, server, RAG, dan Hugging Face. Pelatihan dan Copilot belum dibuat ulang sebagai alur Flutter.
+- **Flutter** tersambung ke project dan modul Kotlin untuk chat API, mode lokal (JNI llama.cpp arm64), server, RAG, Hugging Face, dan Copilot. Pelatihan belum dibuat ulang sebagai alur Flutter.
 
 Rincian lengkap (peta layar lama → Flutter, perubahan Gradle, risiko, dan langkah berikutnya) ada di [docs/MIGRASI_FLUTTER.md](docs/MIGRASI_FLUTTER.md).
 

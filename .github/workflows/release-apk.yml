@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      ORG_GRADLE_PROJECT_withNative: 'true'
     steps:
       - name: Checkout release source
         uses: actions/checkout@v4

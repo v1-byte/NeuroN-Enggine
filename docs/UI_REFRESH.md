@@ -26,9 +26,9 @@ UI hanya mengaktifkan alur yang benar-benar terhubung. Import multi-select dan r
 
 ## APK dan verifikasi
 
-Versi aplikasi untuk rilis ini `0.2.4+6` (tag `v0.2.4`). Workflow `.github/workflows/release-apk.yml` menjalankan `flutter analyze`, `flutter test`, tes/kompilasi Kotlin, lalu `flutter build apk --release` tanpa split ABI dan melampirkan APK serta checksum ke GitHub Release. R8 dan resource shrinking dimatikan pada build alpha karena dependency opsional membawa referensi kelas yang tidak tersedia di Android; APK lebih besar dan belum dioptimalkan.
+Versi aplikasi untuk rilis ini `0.2.5+7` (tag `v0.2.5`). Workflow `.github/workflows/release-apk.yml` menjalankan `flutter analyze`, `flutter test`, tes/kompilasi Kotlin, build JNI llama.cpp melalui submodule, lalu `flutter build apk --release` tanpa split ABI dan melampirkan APK serta checksum ke GitHub Release. R8 dan resource shrinking dimatikan pada build alpha karena dependency opsional membawa referensi kelas yang tidak tersedia di Android; APK lebih besar dan belum dioptimalkan.
 
-Keystore rilis belum disetel untuk build ini. Jika GitHub Actions Secrets signing kosong, Gradle memakai debug signing bawaan dan APK hanya untuk **uji instalasi**, bukan distribusi produksi atau Play Store. Workflow mendukung keystore privat melalui GitHub Actions Secrets; rilis produksi juga memerlukan uji perangkat nyata. APK tidak menyediakan inferensi lokal jika library llama.cpp native tidak disertakan.
+Keystore rilis belum disetel untuk build ini. Jika GitHub Actions Secrets signing kosong, Gradle memakai debug signing bawaan dan APK hanya untuk **uji instalasi**, bukan distribusi produksi atau Play Store. Workflow mendukung keystore privat melalui GitHub Actions Secrets; rilis produksi juga memerlukan uji perangkat nyata. APK 0.2.5 memuat `libneuron_llama.so` untuk `arm64-v8a`; uji inferensi di perangkat fisik tetap wajib.
 
 ## Saran tahap lanjut
 
