@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'bridge.dart';
@@ -18,6 +19,8 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
   final _port = TextEditingController(text: '8080');
   final _serverKey = TextEditingController();
   final _hfToken = TextEditingController();
+  final _complaint = TextEditingController();
+  final _sample = TextEditingController();
   bool _busy = false;
   String _status = '';
   List<Map<String, dynamic>> _models = [];
@@ -25,6 +28,10 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
   Map<String, dynamic> _server = {};
   Map<String, dynamic> _rag = {};
   String? _repoSelected;
+  String? _downloadId;
+  Timer? _downloadPoll;
+  Map<String, dynamic> _downloadState = const {};
+  List<Map<String, dynamic>> _copilotChanges = [];
 
   @override
   void initState() {
@@ -35,11 +42,14 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
 
   @override
   void dispose() {
+    _downloadPoll?.cancel();
     _query.dispose();
     _repo.dispose();
     _port.dispose();
     _serverKey.dispose();
     _hfToken.dispose();
+    _complaint.dispose();
+    _sample.dispose();
     super.dispose();
   }
 
@@ -94,11 +104,39 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
     _status = '${found.length} file GGUF';
   });
 
-  Future<void> _download(String repo, String file) async => _run(() async {
-    final result = await Bridge.hfDownload(repo, file);
-    setState(() => _status = 'Unduhan selesai: ${result['path']}\nSHA-256: ${result['verified'] == true ? 'terverifikasi' : 'tidak tersedia dari Hub'}. Mode lokal disiapkan.');
-    widget.onLog('INFO', 'Model Hugging Face selesai diunduh: ${result['path']}');
-  });
+  Future<void> _download(String repo, String file) async {
+    if (_downloadId != null) return;
+    await _run(() async {
+      final started = await Bridge.hfStartDownload(repo, file);
+      _downloadId = started['id']?.toString();
+      if (_downloadId == null) throw Exception('ID unduhan tidak tersedia');
+      setState(() => _status = 'Unduhan berjalan di background…');
+      _downloadPoll?.cancel();
+      _downloadPoll = Timer.periodic(const Duration(milliseconds: 500), (_) => _pollDownload());
+    });
+  }
+
+  Future<void> _pollDownload() async {
+    final id = _downloadId;
+    if (id == null) return;
+    final state = await Bridge.hfDownloadState(id);
+    if (!mounted) return;
+    setState(() => _downloadState = state);
+    final status = state['state']?.toString();
+    if (status == 'succeeded' || status == 'failed' || status == 'cancelled') {
+      _downloadPoll?.cancel();
+      _downloadId = null;
+      setState(() => _status = status == 'succeeded' ? 'Unduhan selesai: ${state['path']}' : status == 'cancelled' ? 'Unduhan dibatalkan.' : 'Unduhan gagal: ${state['error']}');
+    }
+  }
+
+  Future<void> _cancelDownload() async {
+    final id = _downloadId;
+    if (id == null) return;
+    await Bridge.hfCancelDownload(id);
+    _downloadPoll?.cancel();
+    if (mounted) setState(() { _downloadId = null; _status = 'Permintaan pembatalan dikirim.'; });
+  }
 
   Future<void> _addKnowledge() async {
     final picked = await FilePicker.platform.pickFiles(type: FileType.custom,
@@ -147,7 +185,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
       'Data & RAG' => _ragPage(),
       'Hugging Face' => _hfPage(),
       'Latih' => _pendingPage(Icons.school_outlined, 'Pelatihan belum dihubungkan', 'Modul DatasetImporter dan RemoteTrainer tersedia di Kotlin, tetapi pemilih dataset, konfigurasi job, progres, pembatalan, dan pengambilan adapter belum diorkestrasi dari Flutter.'),
-      'Copilot' => _pendingPage(Icons.auto_awesome_outlined, 'Copilot belum dihubungkan', 'Modul CopilotAgent dan patch/diff tersedia. UI Flutter masih perlu alur permintaan saran, tinjauan diff per berkas, validasi konflik, terima/tolak, dan evaluasi.'),
+      'Copilot' => _copilotPage(),
       'Hardware' => _pendingPage(Icons.memory_outlined, 'Hardware', 'Konfigurasi saat ini bisa diubah melalui hardware/engine.json. Editor hardware terstruktur dan pemeriksaan kompatibilitas perangkat belum tersedia.'),
       _ => _pendingPage(Icons.info_outline, widget.page, 'Fitur ini belum memiliki layar aktif.'),
       },
@@ -203,7 +241,43 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
       Row(children: [Expanded(child: TextField(controller: _query, onSubmitted: (_) => _searchHf(), decoration: const InputDecoration(labelText: 'Cari model', hintText: 'llama 3 gguf'))), const SizedBox(width: 8), IconButton.filled(onPressed: _busy ? null : _searchHf, icon: const Icon(Icons.search))]),
       if (_models.isNotEmpty) ...[const SizedBox(height: 8), for (final model in _models) ListTile(dense: true, contentPadding: EdgeInsets.zero, title: Text('${model['id']}', style: const TextStyle(fontSize: 12)), subtitle: Text('Unduhan ${model['downloads'] ?? 0} · likes ${model['likes'] ?? 0}', style: const TextStyle(color: muted, fontSize: 10)), trailing: const Icon(Icons.chevron_right), onTap: _busy ? null : () => _selectRepo('${model['id']}'))],
       if (_repoSelected != null) ...[const Divider(), Text('File GGUF · $_repoSelected', style: const TextStyle(fontWeight: FontWeight.bold)), for (final file in _files) ListTile(dense: true, contentPadding: EdgeInsets.zero, title: Text('${file['name']}', style: const TextStyle(fontSize: 11)), subtitle: Text(_bytes(file['size']), style: const TextStyle(color: muted, fontSize: 10)), trailing: IconButton(tooltip: 'Unduh file ini', onPressed: _busy ? null : () => _download(_repoSelected!, '${file['name']}'), icon: const Icon(Icons.download, color: purple)))],
-      const SizedBox(height: 5), const Text('Periksa ukuran file dan ruang kosong sebelum mengunduh. Progres per-byte belum ditampilkan pada layar ini.', style: TextStyle(fontSize: 11, color: muted)),
+      if (_downloadId != null) ...[
+        const SizedBox(height: 10),
+        Builder(builder: (_) {
+          final total = (_downloadState['total'] as num?)?.toDouble() ?? -1;
+          final done = (_downloadState['done'] as num?)?.toDouble() ?? 0;
+          return Column(children: [
+            LinearProgressIndicator(value: total > 0 ? (done / total).clamp(0, 1).toDouble() : null),
+            const SizedBox(height: 5),
+            Row(children: [Expanded(child: Text('${_downloadState['file'] ?? 'Menyiapkan…'} · ${_bytes(done)} / ${_bytes(total)}', style: const TextStyle(fontSize: 11, color: muted))), TextButton(onPressed: _cancelDownload, child: const Text('Batal'))]),
+          ]);
+        }),
+      ],
+      const SizedBox(height: 5), const Text('Unduhan memakai WorkManager foreground job, resume dari byte terakhir, menampilkan progres per-byte, dan dapat dibatalkan.', style: TextStyle(fontSize: 11, color: muted)),
+    ])), _message(),
+  ]);
+
+  Widget _copilotPage() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    _card('Copilot konfigurasi', 'Saran dibuat oleh engine aktif. Copilot tidak menulis otomatis: setiap patch harus ditinjau dan diterima per file.', icon: Icons.auto_awesome_outlined, child: Column(children: [
+      TextField(controller: _complaint, maxLines: 3, decoration: const InputDecoration(labelText: 'Keluhan / target perbaikan', hintText: 'Jawaban terlalu panjang dan sering mengulang…')),
+      TextField(controller: _sample, maxLines: 3, decoration: const InputDecoration(labelText: 'Contoh output (opsional)')),
+      const SizedBox(height: 10),
+      Align(alignment: Alignment.centerLeft, child: FilledButton.icon(onPressed: _busy ? null : () => _run(() async {
+        final result = await Bridge.copilotSuggest(_complaint.text, _sample.text, '');
+        setState(() {
+          _copilotChanges = ((result['changes'] as List?) ?? const []).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+          _status = '${result['reason'] ?? 'Tidak ada alasan'}\n${_copilotChanges.isEmpty ? '\nTidak ada perubahan yang diusulkan.' : ''}';
+        });
+      }), icon: const Icon(Icons.lightbulb_outline), label: const Text('Minta saran'))),
+      if (_copilotChanges.isNotEmpty) ...[
+        const Divider(),
+        for (final change in _copilotChanges) Card(color: panel2, child: Padding(padding: const EdgeInsets.all(10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('${change['path']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+          Text('${change['error'] ?? 'Patch valid'}', style: TextStyle(color: change['error'] == null ? Colors.greenAccent : Colors.orangeAccent, fontSize: 11)),
+          if (change['error'] == null) Align(alignment: Alignment.centerRight, child: TextButton(onPressed: _busy ? null : () => _run(() async { await Bridge.copilotApply('${change['path']}', '${change['oldText']}', '${change['newText']}'); setState(() { _copilotChanges.remove(change); _status = 'Patch ${change['path']} diterapkan.'; }); }), child: const Text('Terima patch'))),
+        ]))),
+      ],
+      const SizedBox(height: 6), const Text('Patch dapat diterapkan dari editor setelah ditinjau. File API key, model, training, dan eval tetap diblokir oleh CopilotAgent.', style: TextStyle(fontSize: 11, color: muted)),
     ])), _message(),
   ]);
 

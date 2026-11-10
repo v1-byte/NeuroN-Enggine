@@ -12,7 +12,10 @@ import com.neuron.project.VirtualTree
 import com.neuron.server.LocalServerService
 import com.neuron.server.ServerPrefs
 import com.neuron.hf.HfClient
+import com.neuron.hf.HfDownloadWorker
 import com.neuron.hf.HfPrefs
+import com.neuron.copilot.CopilotAgent
+import com.neuron.copilot.FileChange
 import com.neuron.rag.FileParser
 import com.neuron.rag.RagPipeline
 import com.neuron.rag.SqliteVectorStore
@@ -26,6 +29,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
+import androidx.work.WorkManager
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -89,6 +93,11 @@ internal object ProjectBridge {
                 "hfSearch" -> reply(scope, result) { hfSearch(app, str(a, "query")) }
                 "hfFiles" -> reply(scope, result) { hfFiles(app, str(a, "repo")) }
                 "hfDownload" -> reply(scope, result) { hfDownload(app, str(a, "repo"), str(a, "file")) }
+                "hfStartDownload" -> reply(scope, result) { hfStartDownload(app, str(a, "repo"), str(a, "file")) }
+                "hfDownloadState" -> reply(scope, result) { hfDownloadState(app, str(a, "id")) }
+                "hfCancelDownload" -> reply(scope, result) { hfCancelDownload(app, str(a, "id")) }
+                "copilotSuggest" -> reply(scope, result) { copilotSuggest(app, str(a, "complaint"), str(a, "sample"), str(a, "focus").ifBlank { null }) }
+                "copilotApply" -> reply(scope, result) { copilotApply(app, str(a, "path"), str(a, "oldText"), str(a, "newText")) }
                 "loadFeatures" -> reply(scope, result) { featureState(app) }
                 "setTools" -> reply(scope, result) { setTools(app, a["enabled"] == true) }
                 "saveGuardrails" -> reply(scope, result) { saveGuardrails(app, strList(a, "words"), strList(a, "regex")) }
@@ -245,6 +254,55 @@ internal object ProjectBridge {
         val p = ProjectStore.load(ctx)
         ProjectStore.save(ctx, p.copy(engine = p.engine.copy(mode = EngineMode.LOCAL), files = p.files.copy(modelPath = path)))
         mapOf("path" to path, "bytes" to result.bytes, "verified" to result.verified)
+    }
+
+    /** Memulai unduhan WorkManager agar Flutter dapat menampilkan progres byte dan membatalkan. */
+    private fun hfStartDownload(ctx: Context, repo: String, file: String): Map<String, Any> {
+        require(repo.matches(Regex("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"))) { "ID repo tidak valid" }
+        require(file.endsWith(".gguf", true) && !file.contains("..")) { "Pilih berkas GGUF" }
+        val id = HfDownloadWorker.enqueue(ctx, repo, listOf(file))
+        return mapOf("id" to id.toString(), "repo" to repo, "file" to file)
+    }
+
+    private fun hfDownloadState(ctx: Context, rawId: String): Map<String, Any?> {
+        val id = runCatching { UUID.fromString(rawId) }.getOrElse { return mapOf("state" to "invalid") }
+        val info = WorkManager.getInstance(ctx).getWorkInfoById(id).get()
+            ?: return mapOf("state" to "missing")
+        val p = info.progress
+        val out = info.outputData
+        return mapOf(
+            "state" to info.state.name.lowercase(),
+            "file" to (p.getString(HfDownloadWorker.KEY_FILE) ?: ""),
+            "index" to p.getInt(HfDownloadWorker.KEY_IDX, 0),
+            "count" to p.getInt(HfDownloadWorker.KEY_COUNT, 0),
+            "done" to p.getLong(HfDownloadWorker.KEY_DONE, 0L),
+            "total" to p.getLong(HfDownloadWorker.KEY_TOTAL, -1L),
+            "path" to (out.getString(HfDownloadWorker.KEY_OUT) ?: ""),
+            "error" to (out.getString(HfDownloadWorker.KEY_ERROR) ?: ""),
+        )
+    }
+
+    private fun hfCancelDownload(ctx: Context, rawId: String): Map<String, Any> {
+        WorkManager.getInstance(ctx).cancelWorkById(UUID.fromString(rawId))
+        return mapOf("ok" to true)
+    }
+
+    private fun copilotSuggest(ctx: Context, complaint: String, sample: String, focus: String?): Map<String, Any?> = runBlocking(Dispatchers.IO) {
+        require(complaint.isNotBlank()) { "Jelaskan masalah yang ingin diperbaiki" }
+        val base = ProjectStore.load(ctx)
+        val key = ProjectStore.secrets(ctx).get(ProjectStore.API_KEY) ?: ""
+        val project = base.copy(engine = base.engine.copy(apiKey = key))
+        val brain = CopilotAgent(EngineFactory.wrap(EngineHub.ensure(project), project))
+        val s = brain.suggest(project, complaint, sample, focus)
+        mapOf("reason" to s.reason, "changes" to s.changes.map { c -> mapOf("path" to c.path, "oldText" to c.oldText, "newText" to c.newText, "error" to c.error, "reason" to c.reason) })
+    }
+
+    private fun copilotApply(ctx: Context, path: String, oldText: String, newText: String): Map<String, Any> {
+        require(path.isNotBlank() && newText.isNotBlank()) { "Patch Copilot kosong" }
+        val project = ProjectStore.load(ctx)
+        val updated = CopilotAgent.applyChange(project, FileChange(path, oldText, newText)).getOrThrow()
+        ProjectStore.save(ctx, updated)
+        return mapOf("ok" to true, "path" to path)
     }
 
     /** Riwayat lokal di SharedPreferences privat aplikasi, terpisah dari project.json dan API key. */

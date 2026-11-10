@@ -71,7 +71,7 @@ private class ChatStream(private val ctx: Context) : EventChannel.StreamHandler 
     }
 
     /** Engine (dengan fitur tools/guardrail dari proyek) dan parameter chat dari chat/params.json yang tersimpan. */
-    private fun prepare(): Triple<InferenceEngine, ChatParams, com.neuron.model.AiProject> {
+    private suspend fun prepare(): Triple<InferenceEngine, ChatParams, com.neuron.model.AiProject> {
         val p = ProjectStore.load(ctx)
         val key = ProjectStore.secrets(ctx).get(ProjectStore.API_KEY) ?: ""
         val withKey = p.copy(engine = p.engine.copy(apiKey = key))

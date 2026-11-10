@@ -164,6 +164,24 @@ class Bridge {
       Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>(
               'hfDownload', {'repo': repo, 'file': file}) ??
           const {});
+  static Future<Map<String, dynamic>> hfStartDownload(String repo, String file) async =>
+      Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>(
+              'hfStartDownload', {'repo': repo, 'file': file}) ??
+          const {});
+  static Future<Map<String, dynamic>> hfDownloadState(String id) async =>
+      Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>(
+              'hfDownloadState', {'id': id}) ??
+          const {});
+  static Future<void> hfCancelDownload(String id) async {
+    await _project.invokeMethod<dynamic>('hfCancelDownload', {'id': id});
+  }
+  static Future<Map<String, dynamic>> copilotSuggest(String complaint, String sample, String focus) async =>
+      Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>('copilotSuggest', {
+        'complaint': complaint, 'sample': sample, 'focus': focus,
+      }) ?? const {});
+  static Future<void> copilotApply(String path, String oldText, String newText) async {
+    await _project.invokeMethod<dynamic>('copilotApply', {'path': path, 'oldText': oldText, 'newText': newText});
+  }
 
   static Future<Map<String, String>> loadDrafts() async {
     final m = await _project.invokeMapMethod<String, dynamic>('loadDrafts');

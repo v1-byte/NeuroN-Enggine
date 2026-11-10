@@ -20,6 +20,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.util.UUID
+import java.util.concurrent.TimeUnit
+import kotlinx.serialization.serializer
 
 private val oaiJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
@@ -82,14 +84,14 @@ class LocalServer(
 
     init { require(!apiKey.isNullOrBlank()) { "API key wajib diisi" } }
 
-    private var server: EmbeddedServer<*, *>? = null
+    private var server: ApplicationEngine? = null
 
     fun start() {
         server = embeddedServer(CIO, port = port, host = "0.0.0.0") { module() }.also { it.start(wait = false) }
     }
 
     fun stop() {
-        server?.stop(500, 1000)
+        server?.stop(500, 1000, TimeUnit.MILLISECONDS)
         server = null
     }
 
@@ -140,9 +142,8 @@ class LocalServer(
         if (req.stream) {
             call.respondTextWriter(contentType = ContentType.Text.EventStream) {
                 suspend fun emit(delta: OaiDelta, finish: String?) {
-                    val payload = oaiJson.encodeToString(
-                        OaiChunk(id, "chat.completion.chunk", created, MODEL_ID, listOf(OaiChunkChoice(0, delta, finish)))
-                    )
+                    val payload = oaiJson.encodeToString(OaiChunk.serializer(),
+                        OaiChunk(id, "chat.completion.chunk", created, MODEL_ID, listOf(OaiChunkChoice(0, delta, finish))))
                     write("data: $payload\n\n")
                     flush()
                 }
@@ -155,7 +156,7 @@ class LocalServer(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    write("data: ${oaiJson.encodeToString(OaiErr(OaiErrDetail(e.message ?: "gagal generate", "server_error")))}\n\n")
+                    write("data: ${oaiJson.encodeToString(OaiErr.serializer(), OaiErr(OaiErrDetail(e.message ?: "gagal generate", "server_error")))}\n\n")
                     flush()
                 }
                 write("data: [DONE]\n\n")
@@ -217,7 +218,7 @@ class LocalServer(
         }
 
     private suspend inline fun <reified T> ApplicationCall.sendJson(status: HttpStatusCode, body: T) =
-        respondText(oaiJson.encodeToString(body), ContentType.Application.Json, status)
+        respondText(oaiJson.encodeToString(serializer(), body), ContentType.Application.Json, status)
 
     private suspend fun ApplicationCall.sendError(status: HttpStatusCode, msg: String) =
         sendJson(

@@ -1,6 +1,7 @@
 package com.neuron.engine
 
 import com.neuron.model.FeatureConfig
+import com.neuron.model.ChatParams
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 

@@ -1,0 +1,51 @@
+name: Android verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.24.5'
+          cache: true
+      - name: Install Android SDK components
+        uses: android-actions/setup-android@v3
+      - name: Install NDK and CMake
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;26.3.11579264" "cmake;3.22.1"
+      - name: Flutter dependencies
+        working-directory: flutter_app
+        run: flutter pub get
+      - name: Flutter analyze
+        working-directory: flutter_app
+        run: flutter analyze
+      - name: Flutter tests
+        working-directory: flutter_app
+        run: flutter test
+      - name: Kotlin unit tests and server compile
+        run: ./gradlew testDebugUnitTest :server:compileDebugKotlin --no-daemon
+      - name: Debug APK
+        working-directory: flutter_app
+        run: flutter build apk --debug
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NeuroN-Engine-debug
+          path: flutter_app/build/app/outputs/flutter-apk/app-debug.apk

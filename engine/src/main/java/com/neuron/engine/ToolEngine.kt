@@ -1,6 +1,7 @@
 package com.neuron.engine
 
 import com.neuron.model.ToolDef
+import com.neuron.model.ChatParams
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
