@@ -2,7 +2,7 @@
 
 Ini adalah UI Android NeuroN Engine. Shell dan state aplikasi berada di `lib/main.dart`; halaman utama berada di `lib/app_pages.dart`. Proyek ini adalah entry point APK (`applicationId` `com.neuron.engine`). Dokumentasi lengkap repo ada di [../README.md](../README.md). Catatan migrasi ada di [../docs/MIGRASI_FLUTTER.md](../docs/MIGRASI_FLUTTER.md).
 
-> **Status: UI 0.2.5 alpha.** Shell mobile-first menggantikan tampilan editor-first dan rail kiri lama. Beranda, Chat, Library, Import Center, Activity, serta Workspace tersedia; editor konfigurasi tetap berada di Lainnya → Workspace. APK release telah dibangun dengan JNI llama.cpp arm64. APK CI memakai debug signing tanpa keystore privat dan minifikasi ditunda; bukan untuk distribusi produksi.
+> **Status: UI Flutter alpha.** Beranda, Chat, Library, Import Center, Activity, Workspace, Hugging Face, RAG, Copilot dasar, dan Server lokal tersedia dengan tingkat integrasi berbeda. Training masih placeholder. Build APK/perangkat belum diverifikasi dalam audit saat ini; workflow publikasi release membutuhkan signing secrets valid dan memverifikasi signature sebelum upload.
 
 ## Menjalankan
 
@@ -17,7 +17,7 @@ flutter build apk --release     # perlu android/key.properties, lihat ../docs/RE
 flutter analyze
 ```
 
-Build lokal terverifikasi dengan Flutter 3.24.5, Android SDK 35, NDK 27, dan JDK 17. Untuk build engine lokal, gunakan `ORG_GRADLE_PROJECT_withNative=true`; workflow **Build and publish Android APK** sudah mengaktifkan flag tersebut.
+Build Android harus diverifikasi pada mesin yang memiliki Flutter, Android SDK, NDK, dan JDK yang sesuai. Workflow CI membangun APK, tetapi hanya run sukses dan artefak yang signature-nya benar menjadi bukti build. Keystore rilis disediakan melalui GitHub Actions Secrets; jangan commit key.properties atau keystore. Native llama.cpp tetap memerlukan build untuk ABI target.
 
 ## Struktur
 
@@ -34,7 +34,8 @@ flutter_app/
 ├─ lib/theme.dart             warna dan tema
 ├─ assets/images/neuron_mark.png   mark "NE" untuk header (didaftarkan di pubspec.yaml)
 ├─ android/
-│  ├─ app/src/main/AndroidManifest.xml     permission, label "NeuroN Engine", FlutterActivity
+│  ├─ app/src/main/AndroidManifest.xml     permission, label, cleartext outbound dinonaktifkan
+│  ├─ app/src/debug/AndroidManifest.xml    pengecualian HTTP untuk build debug saja
 │  ├─ app/src/main/kotlin/com/neuron/engine/MainActivity.kt
 │  ├─ app/src/main/kotlin/com/neuron/engine/NeuronBridge.kt   jembatan chat (EventChannel neuron/chat)
 │  ├─ app/src/main/kotlin/com/neuron/engine/ProjectBridge.kt  berkas proyek, pengaturan API, fitur (MethodChannel neuron/project)
@@ -51,17 +52,16 @@ flutter_app/
 
 | Bagian | Di UI sekarang |
 |---|---|
-| Berkas | 17 berkas virtual dari `VirtualTree`, dibaca dan ditulis lewat `neuron/project`. Disimpan ke `project.json` setelah validasi. Undo/redo per berkas |
-| Editor kode | Nomor baris, cari dan ganti semua, Rapikan untuk JSON, status JSON valid |
-| Inspektur | Untuk `chat/params.json`: slider temperature, top-p, top-k, max tokens; seed |
+| Berkas/editor | Workspace dan konfigurasi terbatas; bukan browser penuh untuk semua berkas virtual atau editor IDE multi-file |
+| Inspektur | Subset parameter chat (temperature, top-p, top-k, max tokens, seed) |
 | Pengaturan | Base URL dan model di proyek. API key di SecretStore, tidak ditulis ke `project.json` |
 | Chat | Streaming melalui `EngineHub`: API atau LOCAL llama.cpp; RAG menambahkan konteks retrieval bila indeks tersedia |
-| Fitur | Tool calling (`current_time`, `calculate`) dan guardrail kata/regex, dipasang lewat `EngineFactory.wrap`. Vision, TTS, dan STT belum ada |
+| Fitur | Tool calling (`current_time`, `calculate`) dan guardrail kata/regex tersambung. Vision, TTS, dan STT belum tersedia sebagai alur UI Flutter |
 | Log | Kejadian nyata dari aplikasi (simpan, chat, error) |
-| Copilot | Modul agent tersedia, tetapi alur permintaan saran, diff, terima/tolak, dan eval belum dibuat ulang |
-| Hugging Face | Cari repo GGUF, lihat file, unduh dan verifikasi checksum tersedia; progres per-byte belum tampil |
+| Copilot | Meminta saran dan menerapkan patch yang ditinjau tersedia; evaluasi lanjutan dan alur undo/reject bertingkat belum tersedia |
+| Hugging Face | Cari repo GGUF, lihat file, unduh, progress, cancel, dan verifikasi checksum bila tersedia |
 | Latih | UI dataset, job/progres, stop, dan unduh adapter belum dihubungkan |
-| Server | Pengaturan port/key, start/stop, dan status tersedia; perlu uji di Android |
+| Server | Pengaturan port/key, pembuatan key acak 256-bit, konfirmasi risiko HTTP, start/stop/status tersedia; inbound tetap HTTP tanpa TLS |
 | Data & RAG | Impor dokumen, indeks SQLite, retrieval chat tersedia; hapus dokumen/progres belum ada |
 | Hardware | Inspector belum tersedia; konfigurasi bisa diedit melalui `hardware/engine.json` |
 | Model lokal | Pemilihan GGUF tersedia; inferensi memerlukan library native yang cocok dengan ABI perangkat |
@@ -81,5 +81,6 @@ Skrip ini menulis ulang `assets/images/neuron_mark.png` dan semua `ic_launcher*.
 ## Catatan
 
 - UI sudah dipecah per berkas di `lib/`. Pindahkan layar fitur ke `lib/screens/` bila alur makin besar.
-- Aturan R8 belum ada. Build APK dan uji shrinker tetap wajib sebelum rilis.
+- Android release memblokir koneksi cleartext keluar; server lokal masuk tetap HTTP dan hanya disarankan pada jaringan tepercaya. Debug build mengizinkan HTTP untuk development.
+- Build APK dan uji perangkat tetap wajib sebelum rilis. Lihat `../docs/RELEASE.md` dan `../docs/SERVER.md`.
 - Preview di `design/flutter_preview_v0.2.jpg` adalah mockup arah desain, bukan screenshot Flutter dari perangkat. Rincian shell dan batas fitur ada di `../docs/UI_REFRESH.md`.

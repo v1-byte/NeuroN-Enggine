@@ -1,6 +1,6 @@
 # Layar Latih: Latih, grafik loss, sambung job, dan unduh hasil (langkah 19)
 
-> **Catatan migrasi (2026-11-09):** layar dan tombol di dokumen ini berasal dari UI Compose lama, yang sudah dihapus dari repo. UI Flutter (`flutter_app/`) belum memiliki bagian ini; logika di modul di bawahnya tidak berubah. Lihat [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md).
+> **Status UI Flutter (2026-11-10):** halaman Training tersedia sebagai placeholder, tetapi workflow dataset, konfigurasi job, progres, pembatalan, dan pengambilan adapter belum dihubungkan. Instruksi langkah demi langkah di bawah tidak dapat dilakukan melalui APK Flutter saat ini. Lihat [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md).
 
 
 ## 1. Membuka layar

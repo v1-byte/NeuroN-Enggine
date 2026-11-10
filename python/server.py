@@ -1,13 +1,13 @@
 """NeuroN Trainer: dataset, training, dan operasi model. Dipanggil APK lewat HTTP.
-Jalankan:  NEURON_API_KEY=rahasia LLAMA_CPP_DIR=/path/llama.cpp uvicorn server:app --host 0.0.0.0 --port 8001
-Tidak ada batas ukuran file buatan: upload/download di-stream (resume via HTTP Range).
+Jalankan di localhost: NEURON_API_KEY=<secret> LLAMA_CPP_DIR=/path/llama.cpp uvicorn server:app --host 127.0.0.1 --port 8001
+Upload memiliki batas yang dapat dikonfigurasi; deployment wajib membatasi body di reverse proxy juga.
 """
-import asyncio, hmac, json, os, re, shutil, subprocess, sys, uuid
+import asyncio, hmac, json, os, re, shutil, signal, subprocess, sys, threading, uuid
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 HERE = Path(__file__).parent
 DATA = Path(os.environ.get("NEURON_DATA", "./data")).resolve()
@@ -19,6 +19,25 @@ if not API_KEY:
 LLAMA = os.environ.get("LLAMA_CPP_DIR", "")
 
 
+def positive_env(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    try:
+        value = int(raw) if raw is not None else default
+    except ValueError as exc:
+        raise RuntimeError(f"{name} harus berupa integer positif") from exc
+    if value <= 0:
+        raise RuntimeError(f"{name} harus berupa integer positif")
+    return value
+
+
+# Batas dapat disesuaikan untuk deployment, tetapi proxy di depan API juga wajib
+# membatasi ukuran body karena multipart dapat di-buffer sebelum handler berjalan.
+MAX_DATASET_UPLOAD_BYTES = positive_env("NEURON_MAX_DATASET_UPLOAD_BYTES", 2 * 1024**3)
+MAX_MODEL_UPLOAD_BYTES = positive_env("NEURON_MAX_MODEL_UPLOAD_BYTES", 128 * 1024**3)
+MAX_ACTIVE_JOBS = positive_env("NEURON_MAX_ACTIVE_JOBS", 1)
+MAX_JOB_SECONDS = positive_env("NEURON_MAX_JOB_SECONDS", 24 * 60 * 60)
+
+
 def auth(x_api_key: str = Header(default="")):
     if not hmac.compare_digest(x_api_key.encode(), API_KEY.encode()):
         raise HTTPException(401, "API key salah")
@@ -26,6 +45,7 @@ def auth(x_api_key: str = Header(default="")):
 
 app = FastAPI(title="NeuroN Trainer", dependencies=[Depends(auth)])
 JOBS: dict[str, subprocess.Popen] = {}
+JOBS_LOCK = threading.Lock()
 
 
 # ---------- util ----------
@@ -84,19 +104,55 @@ def need_llama() -> Path:
     return Path(LLAMA)
 
 
-async def save_stream(file: UploadFile, dest: Path):
+async def save_stream(file: UploadFile, dest: Path, max_bytes: int):
     tmp = dest.with_name(dest.name + ".part")
-    with open(tmp, "wb") as out:
-        while chunk := await file.read(1 << 20):
-            out.write(chunk)
-    tmp.replace(dest)
+    total = 0
+    try:
+        with open(tmp, "wb") as out:
+            while chunk := await file.read(1 << 20):
+                total += len(chunk)
+                if total > max_bytes:
+                    raise HTTPException(413, f"Berkas melebihi batas {max_bytes} byte")
+                out.write(chunk)
+        tmp.replace(dest)
+        return total
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def spawn(cmd: list, jid: str):
     jdir = DATA / "jobs" / jid
-    jdir.mkdir(parents=True, exist_ok=True)
-    log = open(jdir / "log.txt", "w", encoding="utf-8")
-    JOBS[jid] = subprocess.Popen([str(c) for c in cmd], stdout=log, stderr=subprocess.STDOUT)
+    with JOBS_LOCK:
+        active = sum(1 for proc in JOBS.values() if proc.poll() is None)
+        if active >= MAX_ACTIVE_JOBS:
+            raise HTTPException(503, "Kapasitas job penuh; coba lagi setelah job aktif selesai")
+        jdir.mkdir(parents=True, exist_ok=True)
+        with open(jdir / "log.txt", "w", encoding="utf-8") as log:
+            proc = subprocess.Popen(
+                [str(c) for c in cmd], stdout=log, stderr=subprocess.STDOUT,
+                start_new_session=(os.name == "posix"),
+            )
+        JOBS[jid] = proc
+
+    def enforce_timeout():
+        try:
+            proc.wait(timeout=MAX_JOB_SECONDS)
+        except subprocess.TimeoutExpired:
+            if os.name == "posix":
+                os.killpg(proc.pid, signal.SIGTERM)
+                try:
+                    proc.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    os.killpg(proc.pid, signal.SIGKILL)
+            else:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+
+    threading.Thread(target=enforce_timeout, name=f"job-timeout-{jid}", daemon=True).start()
 
 
 @app.get("/health")
@@ -108,15 +164,15 @@ def health():
 @app.post("/datasets")
 async def upload_dataset(file: UploadFile = File(...)):
     dest = DATA / "datasets" / safe_name(file.filename or "data.jsonl")
-    await save_stream(file, dest)
-    return {"name": dest.name, "bytes": dest.stat().st_size}
+    size = await save_stream(file, dest, MAX_DATASET_UPLOAD_BYTES)
+    return {"name": dest.name, "bytes": size}
 
 
 @app.post("/models")
 async def upload_model(file: UploadFile = File(...)):
     dest = out_path(safe_name(file.filename or "model.gguf"))
-    await save_stream(file, dest)
-    return {"name": dest.name, "bytes": dest.stat().st_size}
+    size = await save_stream(file, dest, MAX_MODEL_UPLOAD_BYTES)
+    return {"name": dest.name, "bytes": size}
 
 
 @app.get("/models")
@@ -149,16 +205,16 @@ def delete_model(name: str):
 
 # ---------- training ----------
 class TrainReq(BaseModel):
-    method: str = "LORA"  # FULL_FINETUNE | LORA | QLORA | DPO
-    base_model: str = "Qwen/Qwen2.5-0.5B-Instruct"
-    dataset: str
-    learning_rate: float = 2e-4
-    epochs: int = 1
-    batch_size: int = 2
-    lora_rank: int = 8
-    lora_alpha: int = 16
-    max_seq_len: int = 1024
-    val_dataset: str = ""  # opsional: val.jsonl hasil split
+    method: str = Field(default="LORA", pattern="^(FULL_FINETUNE|LORA|QLORA|DPO)$")
+    base_model: str = Field(default="Qwen/Qwen2.5-0.5B-Instruct", min_length=1, max_length=256)
+    dataset: str = Field(min_length=1, max_length=255)
+    learning_rate: float = Field(default=2e-4, gt=0, le=1)
+    epochs: int = Field(default=1, ge=1, le=100)
+    batch_size: int = Field(default=2, ge=1, le=256)
+    lora_rank: int = Field(default=8, ge=1, le=1024)
+    lora_alpha: int = Field(default=16, ge=1, le=4096)
+    max_seq_len: int = Field(default=1024, ge=8, le=131072)
+    val_dataset: str = Field(default="", max_length=255)
 
 
 @app.post("/train")
@@ -175,9 +231,13 @@ def start_train(r: TrainReq):
     jid = uuid.uuid4().hex[:8]
     (DATA / "jobs" / jid).mkdir()
     (DATA / "jobs" / jid / "request.json").write_text(r.model_dump_json())
-    spawn([sys.executable, HERE / "train_lora.py", "--method", r.method, "--base_model", resolve(r.base_model),
-           "--dataset", ds, "--out", DATA / "jobs" / jid / "out", "--lr", r.learning_rate, "--epochs", r.epochs,
-           "--batch", r.batch_size, "--rank", r.lora_rank, "--alpha", r.lora_alpha, "--max_len", r.max_seq_len, *cmd_val], jid)
+    try:
+        spawn([sys.executable, HERE / "train_lora.py", "--method", r.method, "--base_model", resolve(r.base_model),
+               "--dataset", ds, "--out", DATA / "jobs" / jid / "out", "--lr", r.learning_rate, "--epochs", r.epochs,
+               "--batch", r.batch_size, "--rank", r.lora_rank, "--alpha", r.lora_alpha, "--max_len", r.max_seq_len, *cmd_val], jid)
+    except Exception:
+        shutil.rmtree(DATA / "jobs" / jid, ignore_errors=True)
+        raise
     return {"job_id": jid}
 
 

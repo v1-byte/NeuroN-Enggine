@@ -32,6 +32,8 @@ import kotlinx.coroutines.runBlocking
 import androidx.work.WorkManager
 import org.json.JSONArray
 import org.json.JSONObject
+import android.util.Base64
+import java.security.SecureRandom
 
 /**
  * Satu sumber kebenaran untuk UI: proyek "default" di filesDir/projects (lokasi yang sama dengan LocalServerService).
@@ -84,6 +86,7 @@ internal object ProjectBridge {
                 "setLocalModel" -> reply(scope, result) { setLocalModel(app, str(a, "path")) }
                 "serverState" -> reply(scope, result) { serverState(app) }
                 "saveServer" -> reply(scope, result) { saveServer(app, (a["port"] as? Number)?.toInt() ?: 8080, str(a, "apiKey")) }
+                "generateServerKey" -> reply(scope, result) { generateServerKey() }
                 "startServer" -> reply(scope, result) { LocalServerService.start(app); mapOf("ok" to true) }
                 "stopServer" -> reply(scope, result) { LocalServerService.stop(app); mapOf("ok" to true) }
                 "addKnowledgeFile" -> reply(scope, result) { addKnowledgeFile(app, str(a, "path")) }
@@ -198,6 +201,11 @@ internal object ProjectBridge {
         require(key.trim().length >= ServerPrefs.MIN_KEY_LENGTH) { "API key minimal ${ServerPrefs.MIN_KEY_LENGTH} karakter" }
         ServerPrefs(ctx).apply { this.port = port; apiKey = key.trim() }
         return mapOf("ok" to true)
+    }
+
+    private fun generateServerKey(): String {
+        val bytes = ByteArray(32).also { SecureRandom().nextBytes(it) }
+        return Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
     }
 
     private fun addKnowledgeFile(ctx: Context, source: String): Map<String, Any> {

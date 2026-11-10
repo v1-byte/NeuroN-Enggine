@@ -1,18 +1,26 @@
-# Peta Fitur -> File Editor -> Modul
+# Peta kapabilitas modul dan UI Flutter
 
-| Fitur | File virtual (tab editor) | Modul | Bisa jalan di HP? |
+Tabel ini membedakan kemampuan kode/backend dari ketersediaan nyata di aplikasi Flutter. **Ada di modul tidak otomatis berarti tersedia di APK.** Status Android build/native library belum dapat dianggap terverifikasi sebelum CI dan uji perangkat lulus. Peta status lengkap: [STATUS.md](STATUS.md) dan [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md).
+
+| Fitur | Modul/backend | Status UI Flutter saat ini | Batas penting |
 |---|---|---|---|
-| System prompt, temp, top-p/k, min-p, penalties, max tokens, seed, stop, context | chat/params.json | model, engine | Ya |
-| Modelfile, chat template, config.json, generation_config.json | model/* | project, engine | Ya. Modelfile (SYSTEM/PARAMETER) dan generation_config dibaca `ModelDefaults` untuk engine lokal dan API; template dipakai engine lokal; config.json hanya untuk cek konsistensi Copilot |
-| Quantization | model/quantization.json | engine | Pilih varian GGUF; re-quantize butuh tool llama-quantize (bisa dibuat via NDK, berat) |
-| Format GGUF | - | engine (llama.cpp) | Ya |
-| Format ONNX | - | engine (onnxruntime-genai) | Ya, terbatas |
-| Safetensors / AWQ / GPTQ | - | server konversi | Tidak langsung: konversi ke GGUF di PC |
-| Tokenizer vocab & special tokens | tokenizer/* | engine | **vocab.json hanya data project, TIDAK tersambung ke tokenizer GGUF** (engine memakai tokenizer bawaan model). Pengecualian: `special.eos` ikut menjadi stop sequence di kedua engine. Dipakai Copilot untuk cek konsistensi dengan config.json. Ubah vocab = model rusak kecuali dilatih ulang |
-| RAG, vector DB, embedding, knowledge file | knowledge/* | rag | Ya |
-| Fine-tune, LoRA/QLoRA, DPO/RLHF, dataset, LR, epoch, batch, rank, alpha | training/* | train | LoRA kecil: ya. QLoRA/DPO/RLHF/full: via server remote |
-| GPU layers, threads, batch, KV cache, flash attn, RoPE, logit bias | hardware/engine.json | engine | Ya (GPU layers butuh build Vulkan/OpenCL; awal: CPU) |
-| Tools/function calling, guardrails | features/* | engine, server | Ya |
-| Vision, TTS, STT | features/* | engine, UI (`flutter_app/`) | Ya (model vision butuh mmproj + RAM besar) |
-| Server lokal | server/server.json | server | Ya |
-| Copilot | copilot/copilot.json | copilot | Ya (lokal atau API) |
+| Chat dan parameter generasi | `model`, `engine`, `flutter_app/` | Chat dan pengaturan engine tersedia; Inspektur hanya mengedit subset parameter | API butuh endpoint kompatibel; release hanya mengizinkan HTTPS keluar. HTTP lokal hanya debug build. |
+| Konfigurasi model/template | `project`, `engine`, `ModelDefaults` | Editor/workspace konfigurasi tersedia secara terbatas | Bukan editor bebas seluruh berkas; konfigurasi tidak setara dengan runtime setiap format model. |
+| Model GGUF lokal | `engine` (llama.cpp JNI) | Pemilih model tersedia | Inferensi perlu `.so` llama.cpp yang cocok ABI/arsitektur. APK yang hanya memilih GGUF belum menjamin native runtime tersedia. |
+| ONNX | Belum ada runtime ONNX terintegrasi | Tidak tersedia | Runtime `onnxruntime-genai` belum diintegrasikan; jangan nyatakan ONNX bisa dijalankan. |
+| Safetensors / AWQ / GPTQ | Sebagian operasi di backend Python + llama.cpp conversion scripts | Tidak ada alur operasi konversi end-to-end di Flutter | Konversi/kuantisasi berat memerlukan server dan dependensi yang sesuai; AWQ/GPTQ belum didukung sebagai input runnable lokal. |
+| Quantization | `engine`, tool llama.cpp di backend | Pemilihan model GGUF bisa dilakukan; tool quantize bukan workflow lengkap Flutter | Kompatibilitas bergantung binary, format, RAM, dan model sumber. |
+| Tokenizer / vocab | Metadata project dan engine GGUF | Data konfigurasi dapat tampil di workspace | `vocab.json` hanya data project, tidak mengganti tokenizer GGUF. `special.eos` dipakai sebagai stop sequence. |
+| Knowledge / RAG | `rag`, SQLite vector store, engine embed | Impor dokumen dan indexing tersedia | Embedding memerlukan engine/API yang mendukungnya; hapus file/progress terpusat belum tersedia. |
+| Training SFT/LoRA/QLoRA/DPO | `train` Kotlin, `python/server.py`, `train_lora.py` | Layar Training masih placeholder | Tidak ada workflow Flutter untuk upload dataset, job/progress/stop/adapter. ON_DEVICE masih kerangka dan binary finetune belum disertakan. |
+| Hardware tuning | `hardware/engine.json`, `engine` | Konfigurasi dasar melalui workspace | Editor hardware terstruktur dan validasi kompatibilitas perangkat belum tersedia; Vulkan/OpenCL memerlukan build khusus. |
+| Tools dan guardrails | `engine`, `features`, `ProjectBridge` | Toggle tool calling dan editor kata/regex tersedia | Guardrail bukan jaminan keamanan; tetap perlu validasi server-side dan human oversight. |
+| Vision / TTS / STT | Sebagian kemampuan lama pada Kotlin/API | Tidak tersedia sebagai alur Flutter saat ini | Vision API belum diekspos sebagai UI attachment; vision lokal belum ada; jangan klaim tersedia hanya karena model/data class mendukungnya. |
+| Server lokal OpenAI-compatible | `server`, `LocalServerService` | Halaman Server tersedia: key, port, konfirmasi, start/stop/status | Inbound masih HTTP tanpa TLS; key minimum 32 karakter dan listener dibatasi ke satu IPv4 aktif. Hanya jaringan tepercaya, jangan expose ke internet. |
+| Copilot konfigurasi | `copilot`, `ProjectBridge` | Saran dan apply patch setelah ditinjau tersedia | Hanya patch file yang diizinkan; evaluasi penuh, undo/reject bertingkat belum tersedia. Kualitas bergantung provider/model. |
+| API remote | `engine.RemoteApiEngine` | Base URL/model/key melalui Settings | Release memblokir HTTP keluar; pakai HTTPS. Debug build dapat memakai HTTP untuk tes lokal. |
+| Library / import | `flutter_app/` | Pilih GGUF perangkat, cari/unduh HF, impor knowledge | URL langsung, cloud storage, transfer LAN, multi-select/review belum tersedia. |
+
+## Status keamanan jaringan
+
+Build release menyetel `usesCleartextTraffic=false`; hanya manifest varian debug memberi pengecualian HTTP. Ini membatasi koneksi aplikasi **keluar**. Server Ktor yang berjalan pada ponsel adalah koneksi **masuk** terpisah dan tetap HTTP; UI menampilkan konfirmasi risiko sebelum mulai. Karena bearer key dan isi prompt tidak terenkripsi pada server lokal, gunakan hanya di LAN/VPN tepercaya serta hentikan server setelah digunakan.

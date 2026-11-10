@@ -17,15 +17,15 @@ cd flutter_app
 flutter build apk --release
 ```
 - Keluaran: `flutter_app/build/app/outputs/flutter-apk/app-release.apk`. Untuk distribusi, ganti namanya menjadi `NeuroN-Engine-release.apk`.
-- Tanpa `key.properties`, build rilis memakai signing debug (`flutter_app/android/app/build.gradle`). Workflow CI v0.2.4 menghasilkan APK untuk **uji instalasi saja**, bukan distribusi produksi.
+- Build lokal tanpa `key.properties` masih dapat memakai signing debug (`flutter_app/android/app/build.gradle`) untuk uji lokal saja. Jangan distribusikan APK tersebut.
 - Versi diambil dari `flutter_app/pubspec.yaml` (`version: 0.2.4+6` → versionName `0.2.4`, versionCode `6`).
 - Minifikasi R8 dan resource shrinking dimatikan pada build alpha karena beberapa dependency opsional mereferensikan kelas yang tidak disediakan Android; lakukan audit keep rules sebelum mengaktifkannya lagi.
 
 ### Build dan upload melalui GitHub Actions
 
-Workflow `.github/workflows/release-apk.yml` berjalan saat GitHub Release dipublikasikan atau dapat dijalankan manual untuk tag release yang sudah ada. Workflow menjalankan analyze/test Flutter, tes Kotlin, lalu `flutter build apk --release` tanpa `--split-per-abi` sehingga menghasilkan satu APK universal. APK dan file SHA-256 diunggah ke GitHub Release. Tanpa keystore rahasia, nama aset memuat `debug-signed` agar batas signing terlihat jelas.
+Workflow `.github/workflows/release-apk.yml` berjalan saat GitHub Release dipublikasikan atau dapat dijalankan manual untuk tag release yang sudah ada. Workflow menjalankan analyze/test Flutter, tes Kotlin, lalu `flutter build apk --release` tanpa `--split-per-abi` sehingga menghasilkan satu APK universal. APK harus lolos verifikasi `apksigner` sebelum diunggah bersama checksum SHA-256. Workflow rilis **gagal** bila signing secrets tidak lengkap atau keystore/alias tidak valid; tidak ada fallback debug signer dalam workflow publikasi.
 
-Untuk signing produksi, isi semua GitHub Actions Secrets berikut: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, dan `ANDROID_KEY_PASSWORD`. Workflow membentuk `key.properties` sementara di runner lalu Gradle menandatangani APK dengan keystore itu. Jika semua secrets kosong, workflow membuat APK debug-signed untuk pengujian; jika hanya sebagian yang diisi, build dihentikan. Jangan pernah mengunggah keystore atau password ke repo.
+Untuk signing produksi, isi semua GitHub Actions Secrets berikut: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, dan `ANDROID_KEY_PASSWORD`. Workflow memvalidasi keystore/alias, membentuk `key.properties` sementara di runner, lalu memverifikasi signature APK dengan Android `apksigner`. Bila secrets kosong/tidak lengkap, workflow berhenti sebelum build. Jangan pernah mengunggah keystore atau password ke repo. Untuk build debug/internal, gunakan workflow verifikasi biasa atau build lokal; jangan gunakan workflow publikasi release.
 
 ## 2. Minify / R8 / ProGuard
 

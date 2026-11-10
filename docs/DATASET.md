@@ -1,6 +1,6 @@
 # Dataset: import, validasi, pratinjau, dan split train/val (langkah 18)
 
-> **Catatan migrasi (2026-11-09):** layar dan tombol di dokumen ini berasal dari UI Compose lama, yang sudah dihapus dari repo. UI Flutter (`flutter_app/`) belum memiliki bagian ini; logika di modul di bawahnya tidak berubah. Lihat [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md).
+> **Status UI Flutter (2026-11-10):** layar **Training** masih placeholder. Instruksi tombol di bawah berasal dari rancangan UI/flow legacy dan belum dapat dijalankan dari build Flutter saat ini; backend dataset/training tidak berarti workflow pengguna sudah tersedia. Lihat [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md).
 
 
 ## 1. Alur

@@ -127,6 +127,8 @@ class Bridge {
     await _project.invokeMethod<dynamic>(
         'saveServer', {'port': port, 'apiKey': apiKey});
   }
+  static Future<String> generateServerKey() async =>
+      (await _project.invokeMethod<String>('generateServerKey')) ?? '';
   static Future<void> startServer() async {
     await _project.invokeMethod<dynamic>('startServer');
   }

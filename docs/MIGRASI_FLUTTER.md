@@ -8,8 +8,9 @@ Tanggal: 2026-11-09. Dokumen ini berawal dari catatan migrasi dan beberapa bagia
 - File proyek tetap memakai `ProjectRepository`/`VirtualTree`; pengaturan API dan API key melalui bridge yang ada, dengan key disimpan di `SecretStore`.
 - Riwayat chat (tampilan dan konteks percakapan API) sekarang disimpan di SharedPreferences privat Android dan tombol hapus menghapus data tersimpan. Draft editor dipulihkan saat startup, di-flush ketika aplikasi masuk background, dan dibersihkan ketika proyek disimpan. Draft `engine/api.json` sengaja dikecualikan agar API key tidak tersimpan sebagai teks biasa.
 - Modul `:model`, `:engine`, `:project`, `:rag`, `:server`, `:hf`, `:train`, dan `:copilot` telah dimasukkan ke Gradle Flutter. Flutter kini memanggil chat API/LOCAL, kontrol service server, impor dan indexing RAG, serta pencarian/unduh GGUF HF melalui platform bridge.
-- Alur pelatihan dan Copilot belum dibuat ulang di Flutter. Native llama.cpp tetap memerlukan `.so` yang dibangun untuk ABI perangkat; pilihan GGUF saja tidak menyediakan binary tersebut.
-- APK, tes Kotlin/Gradle, signing release, dan pengujian perangkat belum diverifikasi di lingkungan perubahan ini karena Flutter/Android SDK tidak tersedia.
+- Alur training end-to-end belum dibuat ulang di Flutter; layar Training masih menjelaskan bahwa fitur belum terhubung. Copilot dasar sudah aktif untuk meminta saran dan menerapkan patch yang lolos validasi setelah ditinjau. Native llama.cpp tetap memerlukan `.so` yang dibangun untuk ABI perangkat.
+- APK dan tes Kotlin/Gradle belum diverifikasi di lingkungan perubahan ini karena Flutter/Android SDK tidak tersedia. Workflow publikasi release mewajibkan signing secrets valid dan memverifikasi signature APK sebelum upload.
+- Build release menolak koneksi cleartext keluar; varian debug mengizinkan HTTP untuk pengujian. Server lokal masuk tetap HTTP, butuh konfirmasi pengguna, key acak minimal 32 karakter, dan hanya disarankan pada jaringan tepercaya.
 
 ## 1. Ringkasan
 
@@ -32,7 +33,7 @@ Tanggal: 2026-11-09. Dokumen ini berawal dari catatan migrasi dan beberapa bagia
 | Gradle root | tanpa wrapper | wrapper Gradle 8.10.2 disalin dari `flutter_app/android` |
 | Plugin Compose | ada di root | dihapus (tidak ada modul yang memakainya) |
 | Permission | `INTERNET`, FGS, `WAKE_LOCK`, `POST_NOTIFICATIONS`, `RECORD_AUDIO` | sama, dipindah ke manifest Flutter |
-| `usesCleartextTraffic`, `largeHeap` | aktif | aktif (dipindah) |
+| `usesCleartextTraffic`, `largeHeap` | aktif | release `false`; hanya debug overlay `true`; `largeHeap` tetap aktif |
 | Signing rilis | `~/.gradle/gradle.properties` (`neuronKeystore`, dst.) | `flutter_app/android/key.properties` (format Flutter) |
 | minify / R8 | aktif di release | **belum aktif** (lihat `docs/RELEASE.md` bagian 2) |
 | `minSdk` | 26 | **26** (diset di `flutter_app/android/app/build.gradle`, sejak modul engine masuk APK) |
@@ -54,18 +55,18 @@ Dokumen lama (`STATUS.md`, `ARCHITECTURE.md`, dan lain-lain) menjelaskan fitur d
 | Inspektur parameter | **Ada** | Slider temperature, top-p, top-k, max tokens; seed; dropdown engine |
 | Muat / simpan file JSON | **Ada** | Lewat file picker sistem. Belum membaca project sungguhan |
 | Chat | **Terhubung (API/LOCAL)** | Lewat `NeuronBridge` dan `EngineHub`; mode lokal membutuhkan native library. RAG menambahkan konteks jika indeks aktif. Belum dikompilasi |
-| Tool calling, guardrails | **Hanya tampilan** | Chip "current_time", "calculate", "Input guardrail" tidak berfungsi |
+| Tool calling, guardrails | **Terhubung dasar** | Toggle tool calling dan simpan kata/pola guardrail tersedia; hasil tetap bergantung pada model dan bukan pengganti kontrol keamanan backend |
 | Log | **Ada** | Teks sederhana. Diagnostik RAM/ABI belum ada |
-| Copilot | **Belum dibuat ulang** | `CopilotAgent` tersedia di Kotlin; alur saran, diff, terima/tolak, dan eval belum ada di Flutter |
+| Copilot | **Terhubung dasar** | Flutter meminta saran dan menerapkan patch per file setelah ditinjau; flow evaluasi, undo/reject bertingkat belum tersedia |
 | Perintah (command palette) | **Ada** | Dialog daftar perintah |
-| 🤗 Model (Hugging Face) | **Terhubung (dasar)** | Cari model GGUF, daftar file, unduh dan verifikasi bila checksum tersedia; UI belum menampilkan progres per-byte |
-| 🖧 Server lokal | **Terhubung (dasar)** | Simpan port/key terenkripsi, mulai/hentikan service dan baca status; belum diuji di perangkat |
+| 🤗 Model (Hugging Face) | **Terhubung (dasar)** | Cari model GGUF, daftar file, unduh dengan progress/cancel dan verifikasi bila checksum tersedia |
+| 🖧 Server lokal | **Terhubung (dasar)** | Simpan port/key terenkripsi, buat key acak, konfirmasi risiko HTTP, mulai/hentikan service; tanpa TLS dan belum diuji di perangkat |
 | 📚 Data / RAG | **Terhubung (dasar)** | Impor berkas, indeks SQLite dan retrieval konteks chat; progres/hapus berkas belum ada |
-| 🏋 Latih (fine-tune) | **Belum dihubungkan** | Dataset, konfigurasi job, progres, stop, dan unduh adapter belum ada |
+| 🏋 Latih (fine-tune) | **Belum dihubungkan** | Layar placeholder; dataset, konfigurasi job, progres, stop, dan unduh adapter belum diorkestrasi dari Flutter |
 | Hardware (`hardware/engine.json`) | **Nilai tetap** | GPU layers 32, threads 8, dst. Tombol simpan hanya menampilkan pesan |
 | Fitur (`features/features.json`) | **Switch saja** | Tools, Vision, TTS, STT, Guardrails. Tidak tersimpan |
 | Pengaturan | **Statis** | Dialog teks + switch auto-indent |
-| Vision, TTS, STT | **Belum** | Hanya switch |
+| Vision, TTS, STT | **Belum tersedia di Flutter** | Backend lama memiliki sebagian kemampuan, tetapi UI Flutter saat ini belum menyediakan alur lampiran vision atau kontrol TTS/STT |
 | Eval | **Belum** | |
 | Engine lokal (llama.cpp) | **Tersambung bersyarat** | File GGUF bisa dipilih/disalin dan mode LOCAL dipakai; perlu binary JNI yang sesuai ABI |
 | Engine API (`RemoteApiEngine`) | **Terhubung** | Base URL, model, dan API key di Pengaturan. API key di SecretStore (terenkripsi). Belum dikompilasi |
@@ -121,15 +122,15 @@ Risiko yang harus diperhatikan saat build pertama:
 
 - **Typo di logo.** Tulisan di logo sumber berbunyi "NeuroN **Enggine**" (seharusnya "Engine"). Artwork tidak diubah. Di app hanya mark "NE" yang dipakai, jadi typo tidak tampil di UI. Perbaiki di sumber logo sebelum memakai `branding/neuron_logo.png` untuk publikasi.
 - **Preview UI.** `flutter_app/design/flutter_preview_v0.2.jpg` mendokumentasikan arah desain Beranda v0.2 sebagai mockup ilustratif; itu bukan screenshot hasil render Flutter atau uji perangkat.
-- **Dua catatan penyimpanan rahasia yang bertentangan.** `STATUS.md` (Fase B) menyebut token HF dan API key server sudah terenkripsi lewat `SecretStore`, dan itu benar untuk `ServerPrefs` dan `HfPrefs`. Namun `AiProject.apiKey` (di `engine/api.json` dan `training/train.json`) masih plaintext di file project. Catatan `ENGINE_GAPS.md` poin 10 sudah tidak akurat untuk token HF dan API key server, tetapi masih benar untuk API key di file project.
-- **Dokumen fitur.** Dokumen panduan per fitur (`SERVER.md`, `TRAINING.md`, `COPILOT.md`, `DATASET.md`, `RAG.md`, `VISION_VOICE.md`, `NATIVE.md`, `ON_DEVICE.md`) diberi banner. Isinya masih menjelaskan layar yang belum dibuat ulang di Flutter.
+- **Rahasia.** API key engine melalui Settings, token HF, dan key server lokal disimpan di `SecretStore`. Field `remoteTrainerApiKey` pada konfigurasi training tetap perlu diperlakukan sebagai plaintext bila diisi manual ke file project; jangan commit file itu. Lihat juga [STATUS.md](STATUS.md).
+- **Dokumen fitur.** Panduan Server, Copilot, dan RAG kini mencatat alur Flutter yang tersedia serta kekurangannya. Panduan Training/Dataset tetap memberi peringatan bahwa UI training Flutter masih placeholder; Vision/Voice dan ON_DEVICE belum memiliki alur UI penuh.
 - **Lisensi belum ditentukan.** Tidak ada berkas `LICENSE`.
 
 ## 8. Langkah berikutnya (urut)
 
-1. Di mesin dengan Flutter 3.24+ dan Android SDK: `cd flutter_app && flutter pub get && flutter analyze && flutter build apk --debug`. Perbaiki error pertama.
-2. Jalankan tes JUnit modul Kotlin: `./gradlew :engine:testDebugUnitTest :project:testDebugUnitTest :copilot:testDebugUnitTest`.
-3. Tambahkan jembatan MethodChannel untuk `RemoteApiEngine` (ROADMAP fase 1, langkah 5).
-4. Ganti data tetap di editor dengan membaca dan menulis `project` yang sebenarnya (`ProjectRepository`).
-5. Buat ulang layar Server, Data, Latih, dan Hugging Face di Flutter sesuai dokumen panduan.
-6. Aktifkan R8 dan jalankan uji sesuai `docs/RELEASE.md`.
+1. Pada mesin Android: jalankan `flutter pub get`, `flutter analyze`, `flutter test`, `flutter build apk --debug`, lalu tes/compile JUnit dan seluruh modul Kotlin.
+2. Jalankan workflow release dengan signing secrets khusus dan pastikan verifier signature lulus; uji install/update serta server start/stop pada perangkat Android yang didukung.
+3. Bangun dan uji binary llama.cpp untuk ABI target; uji pemuatan model, pembatalan, konsumsi RAM, serta chat lokal.
+4. Uji jaringan: koneksi HTTPS outbound release, HTTP hanya pada debug, server inbound hanya pada interface yang ditampilkan dan tidak terekspos ke jaringan publik.
+5. Lengkapi workflow Flutter Training, file workspace, kontrol hardware, operasi file RAG, dan evaluasi Copilot sebelum menyatakan semua modul siap bagi pengguna.
+6. Tinjau R8/shrinker, lifecycle foreground service, batas storage, observability, dan kesiapan operasional sesuai [docs/RELEASE.md](RELEASE.md).

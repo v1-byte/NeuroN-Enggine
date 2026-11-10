@@ -241,14 +241,15 @@ cd python
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 NEURON_API_KEY=ganti-dengan-kunci-panjang LLAMA_CPP_DIR=/path/ke/llama.cpp \
-  uvicorn server:app --host 0.0.0.0 --port 8001
+  uvicorn server:app --host 127.0.0.1 --port 8001
 ```
 
 - `NEURON_API_KEY` **wajib**. Server menolak berjalan tanpa kunci.
 - `NEURON_DATA` menentukan folder data (default `./data`).
 - Path sumber model dibatasi ke folder models (`hf_repo` / `resolve`).
-- Tes tanpa fastapi (mode STUB): `python3 python/tests/smoke_server.py` dari root repo.
-- Di aplikasi, isi `remoteTrainerUrl` di `training/train.json` dengan `http://IP_PC:8001` dan pilih target `REMOTE_SERVER`.
+- Untuk produksi, ikat Uvicorn ke localhost di belakang reverse proxy TLS. Terapkan batas body, firewall/VPN, rate limiting, kuota/retensi disk, dan monitoring.
+- Smoke test: pasang `python/requirements-test.txt` lalu jalankan `python python/tests/smoke_server.py` dari root; tanpa dependency FastAPI, skrip memakai mode STUB yang tidak menguji HTTP nyata.
+- Backend Python dapat diuji pada LAN via `http://IP_PC:8001`; koneksi HTTP dari APK hanya didukung build debug. Untuk APK release, tempatkan backend di balik reverse proxy TLS dan gunakan URL `https://`. Workflow Flutter Training masih placeholder.
 
 Detail: [python/README.md](python/README.md), [docs/TRAINING.md](docs/TRAINING.md), [docs/DATASET.md](docs/DATASET.md), [docs/CONVERT.md](docs/CONVERT.md).
 
@@ -256,7 +257,7 @@ Detail: [python/README.md](python/README.md), [docs/TRAINING.md](docs/TRAINING.m
 
 ## Server lokal OpenAI-compatible
 
-Server lokal menjalankan model yang sedang dimuat sebagai API HTTP di jaringan Wi-Fi yang sama. Endpoint ini dirancang untuk klien OpenAI standar. Fitur ini termasuk modul `server/` (Kotlin) dan **belum tersedia di UI Flutter**.
+Server lokal menjalankan model aktif sebagai API HTTP dari halaman **Lainnya → Tools → Server lokal**. UI membuat key acak, meminta konfirmasi risiko, dan mengontrol foreground service. Rincian setup dan tes ada di [docs/SERVER.md](docs/SERVER.md).
 
 | Method | Path | Keterangan |
 |---|---|---|
@@ -267,9 +268,10 @@ Server lokal menjalankan model yang sedang dimuat sebagai API HTTP di jaringan W
 
 - Parameter yang dihormati: `temperature`, `top_p`, `max_tokens`, `stop`. Lainnya diambil dari `chat/params.json`.
 - `content` boleh string atau daftar bagian `[{"type":"text","text":"..."}]`.
-- API key wajib minimal 8 karakter jika diisi. Jika diisi, semua route selain `/health` memerlukan `Authorization: Bearer <kunci>`.
+- API key wajib; minimum 32 karakter. Generator UI menghasilkan key acak 256-bit. Semua route selain `/health` memerlukan `Authorization: Bearer <kunci>`.
+- Listener dibatasi ke satu IPv4 aktif (loopback bila tidak ada jaringan); inbound HTTP tidak terenkripsi dan hanya layak di jaringan tepercaya. Jangan expose port ke internet.
 - Server berjalan sebagai foreground service dengan wake lock dan Wi-Fi lock, dan menampilkan IP:port di notifikasi.
-- Batasan: belum ada usage token, format `tool_calls` OpenAI, batas ukuran body, rate limit, dan TLS.
+- Batasan: inbound TLS belum tersedia, belum ada limit ukuran body/rate limit, dan `tool_calls` OpenAI belum didukung. Release memblokir koneksi HTTP outbound; itu tidak mengenkripsi endpoint server masuk.
 
 Contoh dengan `curl` dan SDK Python resmi ada di [docs/SERVER.md](docs/SERVER.md).
 
@@ -296,10 +298,10 @@ python3 scripts/make_brand_assets.py --src /path/ke/logo-sumber.png
 ---
 
 ## Keamanan
-
-- **Rahasia.** Kunci server lokal dan token Hugging Face disimpan terenkripsi (AES-256, `SecretStore`, kunci di Android Keystore). API key engine (`engine/api.json`, `training/train.json`) masih tersimpan **plaintext** di file project. Ini harus dipindahkan ke `SecretStore`.
-- **Keystore rilis** tidak disimpan di repo. Gunakan `flutter_app/android/key.properties` (sudah di `.gitignore`).
-- **Server lokal** memakai HTTP tanpa TLS dan `usesCleartextTraffic` aktif agar bisa diakses di LAN. Jangan membuka port ini ke internet. Gunakan API key yang kuat, dan tombol "Buat API key acak" di layar Server (saat fitur itu sudah dibuat ulang).
+- **Rahasia.** API key engine, key server lokal, dan token Hugging Face disimpan melalui `SecretStore` terenkripsi Android Keystore. `remoteTrainerApiKey` pada `training/train.json` dapat tetap plaintext bila diisi manual; jangan menempelkan secret ke berkas project, issue, log, atau repo.
+- **Keystore rilis** tidak disimpan di repo. Gunakan `flutter_app/android/key.properties` (sudah di `.gitignore`); workflow publikasi mensyaratkan signing secrets/keystore valid dan memeriksa signature APK.
+- **Cleartext outbound.** Android release menetapkan `usesCleartextTraffic=false`; URL API dari APK release harus HTTPS. HTTP hanya diizinkan pada build debug untuk pengujian lokal.
+- **Server lokal inbound** tetap HTTP tanpa TLS. UI menampilkan konfirmasi sebelum mulai, menyediakan key acak 256-bit dengan minimum 32 karakter, dan listener bind ke satu IPv4 aktif. Bearer key/prompt bisa disadap di jaringan; gunakan jaringan tepercaya dan jangan expose/forward port ke internet.
 - **Server Python** menolak start tanpa `NEURON_API_KEY` dan membandingkan kunci dengan perbandingan konstan.
 - **Izin Android** di manifest: `INTERNET`, foreground service, `WAKE_LOCK`, `POST_NOTIFICATIONS`, dan `RECORD_AUDIO` (untuk input suara). Izin `RECORD_AUDIO` belum dipakai UI Flutter.
 - **Copilot** tidak boleh mengubah file terlarang (`engine/api.json`, folder eval, model, training). Patch yang menambah masalah konsistensi `config.json` dengan tokenizer diblokir.
@@ -308,17 +310,16 @@ python3 scripts/make_brand_assets.py --src /path/ke/logo-sumber.png
 
 ## Batasan dan hal yang belum siap
 
-**Belum siap produksi.** Berikut daftar yang sudah diketahui, diurutkan kira-kira menurut dampaknya:
-
-1. **Belum pernah dikompilasi atau dijalankan** di perangkat: kode Kotlin, JNI llama.cpp, Flutter, dan server Python dalam mode nyata.
-2. **UI Flutter masih simulasi.** Chat, Copilot, Hugging Face, dan Latih hanya menampilkan data tetap.
-3. **Modul Kotlin belum masuk APK.** Engine, server, dan RAG belum terhubung ke UI.
+**Belum siap dinyatakan production-ready.** Berikut daftar batasan yang diketahui:
+1. **Build APK dan uji Android belum diverifikasi** dalam lingkungan audit ini. Periksa job CI, tes Kotlin/Gradle, signing release, lalu uji perangkat nyata sebelum publikasi.
+2. **UI Flutter sebagian sudah terhubung**, termasuk chat/API, Hugging Face, RAG, Copilot dasar, dan Server lokal. Training end-to-end masih placeholder; rincian ada di [docs/MIGRASI_FLUTTER.md](docs/MIGRASI_FLUTTER.md).
+3. **Inferensi lokal mensyaratkan native library** llama.cpp yang dibangun untuk ABI perangkat. Pemilihan GGUF saja belum menjamin `.so` tersedia atau model bisa dimuat.
 4. **Template chat Jinja bebas** (`model/chat_template.jinja`) belum didukung. Model dengan template khusus jatuh ke ChatML tanpa pesan jelas.
 5. **Vision lokal** (mmproj / libmtmd) belum ada. Mode LOCAL menolak gambar.
 6. **Tool calling** masih berbasis prompt (`<tool_call>`). Klien OpenAI standar tidak bisa memakainya lewat server lokal.
-7. **Format selain GGUF** (ONNX, AWQ, GPTQ) ditolak dengan petunjuk konversi. Konversi ke GGUF dilakukan di PC.
+7. **ONNX runtime belum terintegrasi.** AWQ/GPTQ/safetensors tidak dapat dijalankan langsung; konversi yang didukung memerlukan backend dan input yang sesuai, bukan workflow Flutter lengkap.
 8. **Trainer ON_DEVICE** memanggil binary `libllamafinetune.so` yang belum ada di repo. Nama flag CLI dan format log belum diverifikasi.
-9. **Editor** belum punya tab file, undo/redo yang berfungsi (di Flutter), dan viewer berhalaman untuk file besar.
+9. **Workspace/editor masih terbatas** dibanding IDE penuh; beberapa alat file dan konfigurasi belum memiliki alur terstruktur.
 10. **Model besar tidak praktis di HP.** 7B Q4 (sekitar 4–5 GB) hanya pas di HP 8–12 GB dan lambat; 70B tidak mungkin. Untuk model besar gunakan server remote (lihat [docs/LIMITS.md](docs/LIMITS.md)).
 11. **Lisensi** belum ditentukan. Tidak ada berkas `LICENSE`.
 
@@ -326,22 +327,16 @@ Batas hardware (RAM HP, VRAM server) dijelaskan di [docs/LIMITS.md](docs/LIMITS.
 
 ---
 
-## Roadmap
-
-Urutan pengerjaan lengkap ada di [docs/ROADMAP.md](docs/ROADMAP.md). Ringkasannya:
+## Roadmap dan status
+Urutan pengerjaan historis ada di [docs/ROADMAP.md](docs/ROADMAP.md). Status fitur terbaru ada di [docs/STATUS.md](docs/STATUS.md) dan matriks [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md). Ringkasannya:
 
 | Fase | Isi | Status |
 |---|---|---|
-| 0 | Pondasi: model, project, editor | Kode ada, UI Flutter sebagian |
-| 1 | Engine: API dan llama.cpp, parameter, template | Kode ada, belum dikompilasi |
-| 2 | Hugging Face: cari, unduh, token | Kode ada, UI demo |
-| 3 | Server lokal, foreground service | Kode ada, belum dikompilasi |
-| 4 | Copilot, eval | Kode ada, belum dikompilasi |
-| 5 | RAG | Kode ada, belum dikompilasi |
-| 6 | Dataset dan training (REMOTE, ON_DEVICE) | Server Python dan kode Kotlin ada; UI demo |
-| 7 | Tools, guardrails, vision, suara, konversi, rilis | Sebagian |
-
-**Prioritas berikutnya** (lihat [docs/MIGRASI_FLUTTER.md](docs/MIGRASI_FLUTTER.md) bagian 8): verifikasi build Flutter, menjalankan tes Kotlin, menghubungkan `RemoteApiEngine` ke UI lewat MethodChannel, lalu membuat ulang layar yang masih demo.
+| 0–1 | Pondasi, project, API/local engine | Flutter sudah terhubung sebagian; native runtime dan build perangkat perlu verifikasi |
+| 2–5 | Hugging Face, server lokal, Copilot dasar, RAG | Layar Flutter tersedia; pengujian perangkat dan beberapa fitur lanjutan masih perlu |
+| 6 | Dataset dan training (REMOTE, ON_DEVICE) | Backend ada; UI Flutter end-to-end belum tersedia; finetune native belum diverifikasi |
+| 7 | Tools, guardrails, vision, suara, konversi, rilis | Tools/guardrails dasar aktif; vision/voice UI dan beberapa konversi belum tersedia |
+**Prioritas berikutnya:** jalankan CI/Android build, lengkapi uji perangkat dan konfigurasi release, lalu selesaikan alur Training dan batasan jaringan/operasional. Rincian ada di [docs/RELEASE.md](docs/RELEASE.md).
 
 ---
 
@@ -354,7 +349,8 @@ Urutan pengerjaan lengkap ada di [docs/ROADMAP.md](docs/ROADMAP.md). Ringkasanny
 | Referensi lama (`:app`, `app/src`, Compose, `neuran`) dicari dan dibersihkan | Dilakukan |
 | `flutter pub get`, `flutter analyze`, `flutter test`, `flutter build apk` | **Belum** (Flutter SDK tidak tersedia di lingkungan migrasi) |
 | `./gradlew :engine:testDebugUnitTest ...` | **Belum** (Gradle, Google Maven, dan Maven Central tidak dapat diakses) |
-| `python3 python/tests/smoke_server.py` (mode STUB) | **47/47 lulus** (dijalankan ulang di repo hasil migrasi; server Python tidak berubah) |
+| Smoke test Python API dengan FastAPI nyata | **57/57 lulus** (HTTP, auth, upload, validation, job cap/timeout; snapshot 2026-11-10) |
+| `python3 -S python/tests/smoke_server.py` (mode STUB) | **49/49 lulus** (snapshot 2026-11-10) |
 | Uji di perangkat | **Belum** |
 
 ---

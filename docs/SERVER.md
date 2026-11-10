@@ -1,78 +1,82 @@
-# Server lokal (OpenAI-compatible) di HP
+# Server lokal (OpenAI-compatible) di Android
 
-> **Catatan migrasi (2026-11-09):** layar dan tombol di dokumen ini berasal dari UI Compose lama, yang sudah dihapus dari repo. UI Flutter (`flutter_app/`) belum memiliki bagian ini; logika di modul di bawahnya tidak berubah. Lihat [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md).
+Aplikasi dapat menjalankan engine aktif sebagai API pada IPv4 interface jaringan yang dipilih. Server memakai HTTP tanpa TLS; bearer key akan terlihat pada jaringan yang dapat mengamati trafik. Gunakan hanya pada jaringan tepercaya dan jangan meneruskan port ini ke internet.
 
+## Mulai atau hentikan server
 
-Menjalankan model yang sedang dimuat sebagai API HTTP di jaringan Wi-Fi yang sama. Laptop atau aplikasi lain
-bisa memakainya seperti server OpenAI.
+1. Buka **Lainnya → Tools → Server lokal**.
+2. Atur port (default `8080`). Buat API key dengan tombol **Buat key acak 256-bit**. Key minimal 32 karakter dan disimpan terenkripsi melalui `SecretStore` setelah disimpan. Gunakan ikon mata untuk menampilkan key sementara lalu salin ke klien; sembunyikan kembali setelah selesai.
+   Key lama yang kurang dari 32 karakter tidak lagi diterima; buat key baru sebelum memulai server setelah update.
+3. Tekan **Simpan & mulai**. Dialog akan meminta konfirmasi bahwa server memakai HTTP tanpa enkripsi; batalkan jika jaringan tidak tepercaya.
+4. Aplikasi menampilkan URL server dan tombol **Hentikan**. Listener bind ke satu alamat IPv4 non-loopback aktif yang dipilih `NetInfo`; bila tidak tersedia, ia hanya bind ke `127.0.0.1`. Alamat tersebut tidak selalu merupakan Wi-Fi yang diinginkan pada perangkat dengan beberapa interface, jadi periksa URL yang ditampilkan.
+5. Setelah selesai, tekan **Hentikan** atau tombol Stop pada notifikasi foreground service.
 
-## 1. Menjalankan
-1. Di app: tombol **🖧 Server**.
-2. Atur port (default 8080) dan API key (WAJIB, minimal 8 karakter; tombol "Buat API key acak" tersedia, server tidak mau jalan tanpa kunci). Lalu **Mulai server**.
-3. Alamat `http://IP_HP:PORT` tampil di layar dan di notifikasi. Notifikasi punya tombol **Stop**.
-4. Server berjalan sebagai foreground service dengan wake lock dan Wi-Fi lock, jadi tetap hidup saat layar mati.
-   Model dimuat otomatis dari project `default` pada permintaan pertama (memakai engine yang sama dengan chat uji).
+Server harus dimulai secara eksplisit dari UI. Android release memblokir koneksi HTTP **keluar** ke endpoint API; pengecualian cleartext hanya ada pada build debug. Kebijakan outbound tersebut terpisah dari server **masuk** ini, yang tetap HTTP dan hanya layak untuk jaringan privat tepercaya.
 
-## 2. Endpoint
-| Method | Path | Keterangan |
-|---|---|---|
-| GET | `/health` | Cek hidup, tanpa API key |
-| GET | `/v1/models` | Daftar model (id: `local`) |
-| POST | `/v1/chat/completions` | Non-stream, atau `"stream": true` (SSE, diakhiri `data: [DONE]`) |
-| POST | `/v1/embeddings` | `input` string atau daftar string |
+## Endpoint
 
-Parameter yang dihormati: `temperature`, `top_p`, `max_tokens`, `stop`. Lainnya diambil dari `chat/params.json`.
-`content` boleh string atau daftar bagian `[{"type":"text","text":"..."}]`.
+| Method | Path | Auth | Keterangan |
+|---|---|---|---|
+| GET | `/health` | Tidak | Cek hidup |
+| GET | `/v1/models` | Bearer | Daftar model (`local`) |
+| POST | `/v1/chat/completions` | Bearer | Chat non-stream atau SSE (`stream: true`) |
+| POST | `/v1/embeddings` | Bearer | `input` string atau array string |
 
-Jika API key diisi, semua route selain `/health` wajib membawa `Authorization: Bearer <kunci>`.
+Semua endpoint selain `/health` mewajibkan `Authorization: Bearer <API_KEY>`. `content` dapat berupa string atau array bagian teks. Parameter yang dihormati mencakup `temperature`, `top_p`, `max_tokens`, dan `stop`; parameter lain berasal dari `chat/params.json`.
 
-## 3. Tes dari laptop (langkah 13)
-Ganti `192.168.x.x:8080` dengan alamat dari layar Server.
+## Tes dari komputer pada jaringan yang sama
+
+Ganti URL dan `API_KEY` dengan nilai yang tampil/diatur di aplikasi. Jangan menaruh key nyata ke repo, issue, atau log yang dibagikan.
 
 ```bash
-# 1. Hidup?
-curl http://192.168.x.x:8080/health
+BASE_URL=http://192.168.x.x:8080
+API_KEY='ISI_KEY_ANDA'
 
-# 2. Model
-curl http://192.168.x.x:8080/v1/models
+# Health publik
+curl "$BASE_URL/health"
 
-# 3. Chat tanpa stream
-curl http://192.168.x.x:8080/v1/chat/completions \
+# Model (memerlukan Bearer key)
+curl "$BASE_URL/v1/models" \
+  -H "Authorization: Bearer $API_KEY"
+
+# Chat non-stream
+curl "$BASE_URL/v1/chat/completions" \
+  -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Halo, siapa kamu?"}],"max_tokens":128}'
 
-# 4. Chat dengan stream (-N agar output tidak di-buffer curl)
-curl -N http://192.168.x.x:8080/v1/chat/completions \
+# Chat stream (-N agar output tidak di-buffer curl)
+curl -N "$BASE_URL/v1/chat/completions" \
+  -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Hitung 1 sampai 5"}],"stream":true}'
 
-# 5. Dengan API key (jika diisi di layar Server)
-curl http://192.168.x.x:8080/v1/models -H "Authorization: Bearer KUNCI_ANDA"
-
-# 6. Embeddings (perlu model yang mendukung embedding)
-curl http://192.168.x.x:8080/v1/embeddings \
+# Embeddings (perlu engine/model yang mendukung embedding)
+curl "$BASE_URL/v1/embeddings" \
+  -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"input":"contoh teks"}'
 ```
 
-Contoh dengan SDK Python resmi (`pip install openai`):
+Contoh Python SDK:
+
 ```python
 from openai import OpenAI
-client = OpenAI(base_url="http://192.168.x.x:8080/v1", api_key="KUNCI_ANDA_ATAU_BEBAS")
-r = client.chat.completions.create(model="local", messages=[{"role": "user", "content": "halo"}])
-print(r.choices[0].message.content)
+client = OpenAI(base_url="http://192.168.x.x:8080/v1", api_key="ISI_KEY_ANDA")
+response = client.chat.completions.create(
+    model="local", messages=[{"role": "user", "content": "Halo"}]
+)
+print(response.choices[0].message.content)
 ```
 
-Respons harapan untuk tes 3: JSON dengan `choices[0].message.content` berisi jawaban. Respons 401 berarti API key
-salah; 503 berarti model belum bisa dimuat (cek tab model/quantization.json atau log `NeuroN-llama` di logcat).
+`401` biasanya berarti key tidak cocok. `503` menandakan model belum siap; periksa model yang dipilih dan log Android.
 
-## 4. Batasan yang perlu diketahui
-- **Satu generate pada satu waktu.** Permintaan lain menunggu tanpa batas waktu di `EngineHub.gate`. Chat uji di HP juga memakai gate ini, jadi keduanya antre bergiliran.
-- **Field `usage` tidak dikirim.** Engine tidak mengembalikan jumlah token; klien yang butuh hitungan token perlu memperkirakan sendiri.
-- **Tool calling** berbasis prompt (lihat `docs/TOOLS_GUARDRAILS.md`). Hasil pemanggilan tool muncul sebagai teks di `content`, bukan `tool_calls`.
-- **Guardrail berlaku** untuk permintaan API, sama seperti chat uji.
-- **Embeddings** memakai engine chat yang sama, bukan model embedding terpisah.
-- **QR belum ada.** Alamat ditampilkan sebagai teks saja.
-- **Alamat IP** diambil dari antarmuka jaringan pertama yang aktif. Jika HP punya beberapa jaringan (mis. hotspot dan Wi-Fi), pilih yang sesuai secara manual.
-- **Tidak ada HTTPS.** Trafik dalam jaringan lokal tidak terenkripsi; API key ikut terkirim sebagai teks biasa. Jangan pakai di jaringan publik.
-- **Belum dikompilasi/diuji di perangkat.**
+## Batasan dan keamanan
+
+- Server memakai HTTP tanpa TLS. Bearer key, prompt, dan jawaban tidak dienkripsi pada jaringan. Key acak 256-bit mengurangi risiko tebakan, tetapi **tidak** mencegah penyadapan.
+- Jangan gunakan pada Wi-Fi publik, jaringan tamu, atau jaringan yang tidak Anda kendalikan. Jangan expose/forward port ke internet. Hentikan server setelah selesai.
+- Listener membatasi bind ke satu IPv4 aktif; pemilihan interface pertama tidak selalu sama dengan Wi-Fi yang dimaksud. Periksa alamat yang ditampilkan.
+- Satu generasi berjalan pada satu waktu; permintaan lain antre melalui `EngineHub.gate`.
+- Pemanggilan tool berbasis prompt; respons belum memakai format OpenAI `tool_calls`. Embedding menggunakan engine yang sama, bukan model embedding khusus.
+- API HTTP eksternal yang dipakai dalam **APK release** harus HTTPS. Build debug mengizinkan HTTP untuk pengujian lokal saja.
+- Uji perangkat nyata tetap diperlukan untuk perilaku jaringan, start/stop service, Android 14+, restart service, dan model yang didukung.

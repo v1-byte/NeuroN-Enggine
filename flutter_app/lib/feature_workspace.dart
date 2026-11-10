@@ -23,6 +23,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
   final _sample = TextEditingController();
   bool _busy = false;
   String _status = '';
+  bool _showServerKey = false;
   List<Map<String, dynamic>> _models = [];
   List<Map<String, dynamic>> _files = [];
   Map<String, dynamic> _server = {};
@@ -32,6 +33,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
   Timer? _downloadPoll;
   Map<String, dynamic> _downloadState = const {};
   List<Map<String, dynamic>> _copilotChanges = [];
+  final Set<String> _reviewedCopilotPaths = {};
 
   @override
   void initState() {
@@ -158,15 +160,47 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
     widget.onLog('INFO', 'Indeks pengetahuan selesai (${report['chunks']} chunk)');
   });
 
-  Future<void> _configureServer() async => _run(() async {
-    final port = int.tryParse(_port.text.trim());
-    if (port == null) throw Exception('Port harus berupa angka.');
-    await Bridge.saveServer(port, _serverKey.text.trim());
-    await Bridge.startServer();
-    await Future<void>.delayed(const Duration(milliseconds: 700));
-    await _loadServer();
-    widget.onLog('INFO', 'Server lokal diminta berjalan pada port $port');
+  Future<bool> _confirmHttpExposure() async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Mulai server HTTP lokal?'),
+          content: const Text(
+              'Server dapat diakses dari perangkat pada interface jaringan yang aktif. Koneksi tidak dienkripsi dan bearer key dapat terlihat oleh pihak lain di jaringan. Lanjutkan hanya pada jaringan tepercaya; jangan gunakan di Wi-Fi publik atau membuka port ke internet.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Batal')),
+            FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Saya paham, lanjutkan')),
+          ],
+        ),
+      ) ??
+      false;
+
+  Future<void> _generateServerKey() async => _run(() async {
+    final key = await Bridge.generateServerKey();
+    if (key.length < 32) throw Exception('Pembuat API key gagal.');
+    setState(() { _serverKey.text = key; _status = 'API key acak baru dibuat. Simpan & mulai untuk menyimpannya secara terenkripsi.'; });
   });
+
+  Future<void> _configureServer() async {
+    if (!await _confirmHttpExposure() || !mounted) return;
+    await _run(() async {
+      final port = int.tryParse(_port.text.trim());
+      if (port == null) throw Exception('Port harus berupa angka.');
+      await Bridge.saveServer(port, _serverKey.text.trim());
+      if (_server['running'] == true) {
+        await Bridge.stopServer();
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      }
+      await Bridge.startServer();
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+      await _loadServer();
+      widget.onLog('INFO', 'Server lokal diminta berjalan pada port $port');
+    });
+  }
 
   Future<void> _stopServer() async => _run(() async {
     await Bridge.stopServer();
@@ -212,16 +246,28 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
   ]);
 
   Widget _serverPage() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    _card('Server OpenAI-compatible', 'Mengekspos API lokal di perangkat. Lindungi endpoint dengan API key; klien pada jaringan yang sama dapat mengaksesnya.', icon: Icons.dns_outlined, child: Column(children: [
+    _card('Server OpenAI-compatible', 'Mengekspos API HTTP pada interface jaringan aktif. Server tidak dienkripsi; mulai hanya pada jaringan tepercaya.', icon: Icons.dns_outlined, child: Column(children: [
       TextField(controller: _port, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Port (1024–65535)')),
-      TextField(controller: _serverKey, obscureText: true, decoration: const InputDecoration(labelText: 'API key (minimal 8 karakter)')),
+      TextField(
+        controller: _serverKey,
+        obscureText: !_showServerKey,
+        decoration: InputDecoration(
+          labelText: 'Bearer API key (minimal 32 karakter)',
+          suffixIcon: IconButton(
+            tooltip: _showServerKey ? 'Sembunyikan key' : 'Tampilkan key untuk disalin',
+            onPressed: () => setState(() => _showServerKey = !_showServerKey),
+            icon: Icon(_showServerKey ? Icons.visibility_off : Icons.visibility),
+          ),
+        ),
+      ),
+      Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: _busy ? null : _generateServerKey, icon: const Icon(Icons.key), label: const Text('Buat key acak 256-bit'))),
       const SizedBox(height: 12), Wrap(spacing: 8, children: [
         FilledButton.icon(onPressed: _busy ? null : _configureServer, icon: const Icon(Icons.play_arrow), label: const Text('Simpan & mulai')),
         OutlinedButton.icon(onPressed: _busy ? null : _stopServer, icon: const Icon(Icons.stop), label: const Text('Hentikan')),
         TextButton(onPressed: _busy ? null : _loadServer, child: const Text('Segarkan')),
       ]),
       const SizedBox(height: 8), Align(alignment: Alignment.centerLeft, child: Text((_server['running'] == true ? 'Aktif: ${_server['address'] ?? 'menunggu alamat'}' : 'Tidak aktif') + ((_server['error'] == null) ? '' : '\nError: ${_server['error']}'), style: TextStyle(color: _server['running'] == true ? Colors.greenAccent : muted, fontSize: 12))),
-      const SizedBox(height: 6), const Text('Perangkat klien harus memakai URL yang tampil dan Bearer token yang disetel. Endpoint HTTP tidak mengenkripsi lalu lintas.', style: TextStyle(fontSize: 11, color: muted)),
+      const SizedBox(height: 6), const Text('Sebelum mulai akan tampil konfirmasi keamanan. Gunakan key acak dan jangan bagikan key melalui kanal yang tidak aman. Build release memblokir koneksi HTTP keluar ke API; server HTTP masuk ini tetap hanya untuk jaringan tepercaya.', style: TextStyle(fontSize: 11, color: muted)),
     ])), _message(),
   ]);
 
@@ -266,16 +312,54 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
         final result = await Bridge.copilotSuggest(_complaint.text, _sample.text, '');
         setState(() {
           _copilotChanges = ((result['changes'] as List?) ?? const []).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+          _reviewedCopilotPaths.clear();
           _status = '${result['reason'] ?? 'Tidak ada alasan'}\n${_copilotChanges.isEmpty ? '\nTidak ada perubahan yang diusulkan.' : ''}';
         });
       }), icon: const Icon(Icons.lightbulb_outline), label: const Text('Minta saran'))),
       if (_copilotChanges.isNotEmpty) ...[
         const Divider(),
-        for (final change in _copilotChanges) Card(color: panel2, child: Padding(padding: const EdgeInsets.all(10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${change['path']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-          Text('${change['error'] ?? 'Patch valid'}', style: TextStyle(color: change['error'] == null ? Colors.greenAccent : Colors.orangeAccent, fontSize: 11)),
-          if (change['error'] == null) Align(alignment: Alignment.centerRight, child: TextButton(onPressed: _busy ? null : () => _run(() async { await Bridge.copilotApply('${change['path']}', '${change['oldText']}', '${change['newText']}'); setState(() { _copilotChanges.remove(change); _status = 'Patch ${change['path']} diterapkan.'; }); }), child: const Text('Terima patch'))),
-        ]))),
+        for (final change in _copilotChanges) ...[
+          Builder(builder: (context) {
+            final path = '${change['path']}';
+            final reviewed = _reviewedCopilotPaths.contains(path);
+            return Card(color: panel2, child: Padding(padding: const EdgeInsets.all(10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(path, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              Text('${change['error'] ?? 'Patch valid'}', style: TextStyle(color: change['error'] == null ? Colors.greenAccent : Colors.orangeAccent, fontSize: 11)),
+              if (change['error'] == null) ...[
+                const SizedBox(height: 8),
+                const Text('Sebelum', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 11)),
+                SelectableText('${change['oldText'] ?? ''}', style: const TextStyle(fontFamily: 'monospace', fontSize: 10)),
+                const SizedBox(height: 8),
+                const Text('Usulan', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 11)),
+                SelectableText('${change['newText'] ?? ''}', style: const TextStyle(fontFamily: 'monospace', fontSize: 10)),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  value: reviewed,
+                  title: const Text('Saya sudah meninjau teks sebelum dan usulan', style: TextStyle(fontSize: 11)),
+                  onChanged: (value) => setState(() {
+                    if (value == true) {
+                      _reviewedCopilotPaths.add(path);
+                    } else {
+                      _reviewedCopilotPaths.remove(path);
+                    }
+                  }),
+                ),
+                Align(alignment: Alignment.centerRight, child: TextButton(
+                  onPressed: _busy || !reviewed ? null : () => _run(() async {
+                    await Bridge.copilotApply(path, '${change['oldText']}', '${change['newText']}');
+                    setState(() {
+                      _copilotChanges.remove(change);
+                      _reviewedCopilotPaths.remove(path);
+                      _status = 'Patch $path diterapkan.';
+                    });
+                  }),
+                  child: const Text('Terapkan patch yang ditinjau'),
+                )),
+              ],
+            ])));
+          }),
+        ],
       ],
       const SizedBox(height: 6), const Text('Patch dapat diterapkan dari editor setelah ditinjau. File API key, model, training, dan eval tetap diblokir oleh CopilotAgent.', style: TextStyle(fontSize: 11, color: muted)),
     ])), _message(),

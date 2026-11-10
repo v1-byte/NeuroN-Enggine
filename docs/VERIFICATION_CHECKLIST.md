@@ -26,8 +26,9 @@ Dokumen ini membedakan implementasi kode, verifikasi yang dapat dijalankan di CI
 ## Server lokal Android
 
 - Start/stop memakai `LocalServerService` foreground dengan `specialUse`, wake lock, Wi-Fi lock, dan notifikasi Stop.
-- API key wajib minimal 8 karakter dan disimpan melalui `SecretStore`.
-- Server bind ke `0.0.0.0` untuk akses LAN; gunakan hanya di jaringan tepercaya karena HTTP tidak terenkripsi.
+- API key wajib minimal 32 karakter, key acak 256-bit dapat dibuat dari UI, dan key disimpan melalui `SecretStore`.
+- Server meminta persetujuan risiko sebelum mulai; listener bind ke satu IPv4 aktif (atau loopback tanpa IPv4 non-loopback), bukan wildcard `0.0.0.0`.
+- Pastikan release memblokir HTTP outbound dan debug mengizinkannya; uji bahwa inbound server tetap HTTP dan key/prompt tidak terkirim pada jaringan publik.
 - Uji perangkat: start/stop, `/health`, `/v1/models`, `/v1/chat/completions` streaming/non-stream, `/v1/embeddings`, key salah, Android 14+, dan restart service.
 
 ## Fitur UI yang sebelumnya tertunda

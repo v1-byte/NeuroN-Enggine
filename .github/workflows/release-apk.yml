@@ -59,7 +59,7 @@ jobs:
       - name: Test Kotlin modules
         run: ./gradlew testDebugUnitTest :server:compileDebugKotlin --no-daemon
 
-      - name: Configure release signing when secrets are available
+      - name: Require and configure production release signing
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -68,32 +68,37 @@ jobs:
         run: |
           set +x
           values=("$ANDROID_KEYSTORE_BASE64" "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" "$ANDROID_KEY_PASSWORD")
-          present=0
           missing=0
           for value in "${values[@]}"; do
-            if [ -n "$value" ]; then present=$((present + 1)); else missing=$((missing + 1)); fi
+            if [ -z "$value" ]; then missing=$((missing + 1)); fi
           done
-          if [ "$present" -eq 0 ]; then
-            echo "APK_SIGNING_LABEL=debug-signed" >> "$GITHUB_ENV"
-            echo "No release keystore configured; APK will use the debug signer for testing only."
-          elif [ "$missing" -ne 0 ]; then
+          if [ "$missing" -ne 0 ]; then
             echo "Release signing secrets are incomplete." >&2
             exit 1
-          else
-            KEYSTORE="$GITHUB_WORKSPACE/flutter_app/android/neuron-release.jks"
-            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
-            cat > flutter_app/android/key.properties <<EOF
+          fi
+          KEYSTORE="$GITHUB_WORKSPACE/flutter_app/android/neuron-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+          test -s "$KEYSTORE"
+          keytool -list -keystore "$KEYSTORE" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
+          cat > flutter_app/android/key.properties <<EOF
           storeFile=$KEYSTORE
           storePassword=$ANDROID_KEYSTORE_PASSWORD
           keyAlias=$ANDROID_KEY_ALIAS
           keyPassword=$ANDROID_KEY_PASSWORD
           EOF
-            echo "APK_SIGNING_LABEL=release-signed" >> "$GITHUB_ENV"
-          fi
+          echo "APK_SIGNING_LABEL=release-signed" >> "$GITHUB_ENV"
 
       - name: Build universal release APK
         working-directory: flutter_app
         run: flutter build apk --release
+
+      - name: Verify APK signature
+        run: |
+          APK=flutter_app/build/app/outputs/flutter-apk/app-release.apk
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          "$APKSIGNER" verify "$APK"
 
       - name: Prepare APK and checksum
         run: |

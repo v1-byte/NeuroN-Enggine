@@ -20,5 +20,5 @@ class ServerPrefs(ctx: Context) {
         get() = p.getBoolean("enabled", false)
         set(v) { p.edit().putBoolean("enabled", v).apply() }
 
-    companion object { const val MIN_KEY_LENGTH = 8 }
+    companion object { const val MIN_KEY_LENGTH = 32 }
 }

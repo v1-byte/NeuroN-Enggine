@@ -75,6 +75,7 @@ class LocalServerService : Service() {
         try {
             check(prefs.apiKey.length >= ServerPrefs.MIN_KEY_LENGTH) { "API key wajib diisi (minimal ${ServerPrefs.MIN_KEY_LENGTH} karakter)" }
             val repo = ProjectRepository(File(filesDir, "projects"))
+            val bindHost = NetInfo.localIpv4() ?: "127.0.0.1"
             val srv = LocalServer(
                 projectProvider = {
                     val project = repo.loadOrCreate("default")
@@ -83,12 +84,13 @@ class LocalServerService : Service() {
                 },   // config dan secret API dibaca ulang tiap permintaan
                 apiKey = prefs.apiKey,
                 port = prefs.port,
+                host = bindHost,
             )
             srv.start()
             server = srv
             acquireLocks()
             prefs.enabled = true
-            val addr = "http://${NetInfo.localIpv4() ?: "127.0.0.1"}:${prefs.port}"
+            val addr = "http://$bindHost:${prefs.port}"
             _state.value = ServerState(running = true, address = addr)
             startFg("Aktif di $addr", addr)
         } catch (e: Exception) {

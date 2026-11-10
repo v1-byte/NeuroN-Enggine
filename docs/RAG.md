@@ -1,6 +1,6 @@
 # RAG (tanya jawab dari dokumenmu)
 
-> **Catatan migrasi (2026-11-09):** layar dan tombol di dokumen ini berasal dari UI Compose lama, yang sudah dihapus dari repo. UI Flutter (`flutter_app/`) belum memiliki bagian ini; logika di modul di bawahnya tidak berubah. Lihat [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md).
+> **Status UI Flutter (2026-11-10):** impor dokumen, pembuatan indeks, dan retrieval saat chat tersedia lewat **Lainnya → Tools → Knowledge / RAG**. Fitur hapus dokumen dan progres terpusat belum tersedia. Periksa [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md) untuk batas UI terbaru.
 
 
 ## Alur
@@ -8,13 +8,12 @@
 -> di-embedding -> disimpan di SQLite (`files/projects/<nama>/rag.db`). Saat chat dengan `ragEnabled=true`, pertanyaan
 di-embedding, `topK` chunk terdekat (cosine) disisipkan ke **pesan terakhir** pengguna, dan nama file sumber tampil di bawah jawaban.
 
-## Cara pakai
-1. Siapkan model embedding GGUF **terpisah** (jangan pakai model chat: kualitasnya buruk). Untuk bahasa Indonesia pilih
-   yang multibahasa, mis. multilingual-e5-small atau bge-m3 (Q8/Q4). Isi `embeddingModelPath`.
-2. Salin dokumen ke folder knowledge: `adb push catatan.pdf /sdcard/Android/data/com.neuron.engine/files/knowledge/`
-3. `knowledgeFiles`: `["catatan.pdf", "folder/"]` (relatif = folder di atas; `"."` = semuanya; path absolut dan `content://` juga bisa).
-4. `ragEnabled`: true. Simpan, lalu tekan **Indeks** (log di panel Log). Indeks ulang hanya file yang berubah (hash isi).
-5. Chat seperti biasa.
+## Cara pakai di Flutter
+1. Buka **Lainnya → Tools → Knowledge / RAG** dan tekan **Tambah dokumen**. Pilih file yang didukung; tiap file dibatasi 25 MB dan disalin ke penyimpanan privat aplikasi.
+2. Tekan **Buat / perbarui indeks**. Aplikasi memakai engine yang sedang aktif untuk embedding; engine API harus mendukung `/v1/embeddings`.
+3. Setelah indeks selesai, buka Chat dan ajukan pertanyaan tentang isi dokumen. RAG menyisipkan konteks hasil retrieval bila knowledge aktif.
+
+Konfigurasi low-level (`knowledge/rag.json`) masih dapat diperiksa di project. Namun, pemilihan model embedding terpisah, pengelolaan folder/path arbitrer, dan penghapusan dokumen belum disediakan di UI Flutter.
 
 ## Format
 txt, md, csv, json, kode, html, **docx**, **pdf** (PDF hasil scan tidak punya teks: tidak didukung, butuh OCR).

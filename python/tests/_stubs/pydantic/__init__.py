@@ -1,5 +1,8 @@
 # STUB: meniru BaseModel minimal (field wajib vs default, model_dump_json). Tanpa validasi tipe.
 import json
+def Field(default=..., **kwargs):
+    return default
+
 class BaseModel:
     def __init__(self, **data):
         names = []

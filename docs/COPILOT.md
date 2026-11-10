@@ -1,17 +1,16 @@
 # Copilot: saran perbaikan konfigurasi + eval sebelum/sesudah
 
-> **Catatan migrasi (2026-11-09):** layar dan tombol di dokumen ini berasal dari UI Compose lama, yang sudah dihapus dari repo. UI Flutter (`flutter_app/`) belum memiliki bagian ini; logika di modul di bawahnya tidak berubah. Lihat [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md).
+> **Status UI Flutter (2026-11-10):** layar **Lainnya → Tools → Copilot** dapat meminta saran, menampilkan teks sebelum/usulan per file, dan mensyaratkan checkbox review sebelum menerapkan patch. Evaluasi sebelum/sesudah serta undo/reject bertingkat belum tersedia di Flutter. Status rinci: [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md).
 
 
 Copilot membaca keluhanmu, lalu mengusulkan perubahan ke file konfigurasi project. Kamu meninjau setiap perubahan
 sebagai diff, lalu menerima atau menolaknya. Eval membandingkan jawaban model sebelum dan sesudah perubahan.
 
 ## 1. Alur kerja
-1. Buka tab **🤖 Copilot** di panel bawah Workbench (tombol ⤢ Penuh untuk layar penuh).
-2. Tulis **keluhan** (mis. "jawaban terlalu panjang dan tidak pakai bahasa Indonesia"). Contoh output bermasalah opsional.
-3. **Minta saran.** Copilot memakai engine yang sedang aktif (lokal atau API).
-4. Tinjau setiap usulan: alasan, diff baris yang berubah, lalu **Terima** atau **Tolak** per file. **Terima semua** juga tersedia.
-5. Sebelum menerima, jalankan **Eval sebelum**. Setelah menerima, jalankan **Eval sesudah**. Hasilnya tampil sebagai ↑ membaik, ↓ memburuk, atau = sama.
+
+Di Flutter, buka **Lainnya → Tools → Copilot**, masukkan keluhan dan contoh output (opsional), lalu tekan **Minta saran**. Untuk setiap patch valid, baca teks sebelum dan teks usulan, centang persetujuan review, lalu tekan **Terapkan patch yang ditinjau**. Engine/provider aktif akan digunakan.
+
+UI Flutter menampilkan isi sebelum/usulan, tetapi belum menyediakan diff berwarna/berbaris atau evaluasi sebelum/sesudah dan undo/reject bertingkat. Persetujuan pengguna tetap wajib; periksa hasil pada workspace setelah perubahan.
 
 Perubahan yang diterima langsung disimpan ke project. Kamu bisa membatalkan dengan mengedit file lalu menyimpannya kembali.
 

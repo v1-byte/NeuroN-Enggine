@@ -79,6 +79,7 @@ class LocalServer(
     private val projectProvider: () -> AiProject,
     private val apiKey: String? = null,
     private val port: Int = 8080,
+    private val host: String = "127.0.0.1",
 ) {
     companion object { const val MODEL_ID = "local" }
 
@@ -87,7 +88,7 @@ class LocalServer(
     private var server: ApplicationEngine? = null
 
     fun start() {
-        server = embeddedServer(CIO, port = port, host = "0.0.0.0") { module() }.also { it.start(wait = false) }
+        server = embeddedServer(CIO, port = port, host = host) { module() }.also { it.start(wait = false) }
     }
 
     fun stop() {

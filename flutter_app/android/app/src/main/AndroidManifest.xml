@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Akses jaringan: unduh model Hugging Face dan panggilan ke API OpenAI-compatible -->
     <uses-permission android:name="android.permission.INTERNET"/>
-    <!-- Untuk server lokal & trainer on-device (belum dihubungkan ke UI Flutter; lihat docs/MIGRASI_FLUTTER.md) -->
+    <!-- Foreground services: server lokal tersedia di Flutter; trainer on-device belum menjadi alur UI -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
@@ -15,7 +15,7 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:largeHeap="true"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="false">
         <activity
             android:name="com.neuron.engine.MainActivity"
             android:exported="true"

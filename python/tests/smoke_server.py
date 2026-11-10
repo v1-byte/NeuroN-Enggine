@@ -7,6 +7,7 @@ Tidak menjalankan proses training/konversi: spawn() diganti pencatat.
 Keluar dengan kode 1 bila ada yang gagal.
 """
 import ast, builtins, json, os, symtable, sys, tempfile, traceback
+import asyncio
 from pathlib import Path
 
 sys.dont_write_bytecode = True  # jangan menulis __pycache__ ke repo
@@ -91,13 +92,29 @@ except Exception:
     S = None
 
 if S is not None:
-    routes = {(m, p) for m, p, _ in S.app.routes}
+    routes = set()
+    for route in S.app.routes:
+        if isinstance(route, tuple):  # stub
+            routes.add((route[0], route[1]))
+        elif getattr(route, "path", "").startswith(("/health", "/datasets", "/models", "/train", "/ops", "/jobs", "/adapters", "/convert")):
+            routes.update((method, route.path) for method in (getattr(route, "methods", None) or set()))
     expected = {("GET","/health"),("POST","/datasets"),("POST","/models"),("GET","/models"),("GET","/models/{name:path}"),
                 ("DELETE","/models/{name:path}"),("POST","/train"),("POST","/ops"),("GET","/train/{jid}/events"),
                 ("GET","/jobs/{jid}/events"),("POST","/train/{jid}/cancel"),("POST","/jobs/{jid}/cancel"),
                 ("GET","/adapters/{jid}"),("POST","/convert/lora/{jid}")}
     check("route terdaftar lengkap", routes == expected, f"hilang={expected-routes} ekstra={routes-expected}")
     check("health", S.health() == {"status": "ok", "llama_cpp": True})
+    if MODE.startswith("REAL"):
+        try:
+            from fastapi.testclient import TestClient
+            with TestClient(S.app) as client:
+                check("HTTP menolak request tanpa API key", client.get("/health").status_code == 401)
+                response = client.get("/health", headers={"x-api-key": "rahasia"})
+                check("HTTP menerima API key dan health", response.status_code == 200 and response.json()["status"] == "ok")
+                response = client.post("/datasets", headers={"x-api-key": "rahasia"}, files={"file": ("http-test.jsonl", b'{"ok":true}\n')})
+                check("HTTP upload dataset", response.status_code == 200 and response.json()["bytes"] == 12)
+        except Exception:
+            check("HTTP TestClient", False, traceback.format_exc().splitlines()[-1])
 
     check("safe_name buang path traversal", S.safe_name("../../etc/passwd.jsonl") == "passwd.jsonl")
     try:
@@ -108,6 +125,47 @@ if S is not None:
     (S.DATA / "models").mkdir(parents=True, exist_ok=True)
     (S.DATA / "models" / "m.gguf").write_text("x")
     check("resolve mengembalikan path model server", S.resolve("m.gguf") == str(S.DATA / "models" / "m.gguf"))
+
+    class FakeUpload:
+        def __init__(self, chunks): self.chunks = iter(chunks)
+        async def read(self, _size): return next(self.chunks, b"")
+
+    capped = S.DATA / "datasets" / "too-large.jsonl"
+    try:
+        asyncio.run(S.save_stream(FakeUpload([b"1234", b"56"]), capped, 5))
+        check("upload melewati batas -> 413", False, "tidak melempar")
+    except S.HTTPException as e:
+        check("upload melewati batas -> 413", e.status_code == 413 and not capped.exists() and not capped.with_name(capped.name + ".part").exists())
+    saved = S.DATA / "datasets" / "small.jsonl"
+    size = asyncio.run(S.save_stream(FakeUpload([b"123", b"45"]), saved, 5))
+    check("upload di bawah batas tersimpan atomik", size == 5 and saved.read_bytes() == b"12345")
+    if MODE.startswith("REAL"):
+        for invalid in ({"method": "RLHF"}, {"epochs": 0}, {"learning_rate": 0}):
+            try:
+                S.TrainReq(dataset="ds.jsonl", **invalid)
+                check(f"schema training menolak nilai invalid {invalid}", False, "diterima")
+            except Exception:
+                check(f"schema training menolak nilai invalid {invalid}", True)
+        import time
+        S.MAX_ACTIVE_JOBS = 1
+        original_timeout = S.MAX_JOB_SECONDS
+        S.MAX_JOB_SECONDS = 30
+        S.spawn([sys.executable, "-c", "import time; time.sleep(20)"], "job-cap-test")
+        try:
+            S.spawn([sys.executable, "-c", "pass"], "job-cap-rejected")
+            check("job paralel ditolak saat kapasitas penuh", False, "diterima")
+        except S.HTTPException as e:
+            check("job paralel ditolak saat kapasitas penuh", e.status_code == 503)
+        finally:
+            S.JOBS["job-cap-test"].terminate()
+            S.JOBS["job-cap-test"].wait(timeout=5)
+        S.MAX_JOB_SECONDS = 1
+        S.spawn([sys.executable, "-c", "import time; time.sleep(20)"], "job-timeout-test")
+        deadline = time.monotonic() + 5
+        while S.JOBS["job-timeout-test"].poll() is None and time.monotonic() < deadline:
+            time.sleep(0.05)
+        check("job melewati timeout dihentikan", S.JOBS["job-timeout-test"].poll() is not None)
+        S.MAX_JOB_SECONDS = original_timeout
 
     try:
         S.auth(x_api_key="")
