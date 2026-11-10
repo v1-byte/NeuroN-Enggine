@@ -17,8 +17,8 @@ cd flutter_app
 flutter build apk --release
 ```
 - Keluaran: `flutter_app/build/app/outputs/flutter-apk/app-release.apk`. Untuk distribusi, ganti namanya menjadi `NeuroN-Engine-release.apk`.
-- Tanpa `key.properties`, build rilis memakai signing debug (`flutter_app/android/app/build.gradle`). Workflow CI v0.2.2 menghasilkan APK untuk **uji instalasi saja**, bukan distribusi produksi.
-- Versi diambil dari `flutter_app/pubspec.yaml` (`version: 0.2.2+4` → versionName `0.2.2`, versionCode `4`).
+- Tanpa `key.properties`, build rilis memakai signing debug (`flutter_app/android/app/build.gradle`). Workflow CI v0.2.3 menghasilkan APK untuk **uji instalasi saja**, bukan distribusi produksi.
+- Versi diambil dari `flutter_app/pubspec.yaml` (`version: 0.2.3+5` → versionName `0.2.3`, versionCode `5`).
 
 ### Build dan upload melalui GitHub Actions
 

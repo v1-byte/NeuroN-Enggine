@@ -1,4 +1,4 @@
-# UI terbaru NeuroN Engine — v0.2.2 alpha
+# UI terbaru NeuroN Engine — v0.2.3 alpha
 
 ## Arah desain
 
@@ -26,7 +26,7 @@ UI hanya mengaktifkan alur yang benar-benar terhubung. Import multi-select dan r
 
 ## APK dan verifikasi
 
-Versi aplikasi untuk rilis ini `0.2.2+4` (tag `v0.2.2`). Workflow `.github/workflows/release-apk.yml` menjalankan `flutter analyze`, `flutter test`, tes/kompilasi Kotlin, lalu `flutter build apk --release` tanpa split ABI dan melampirkan APK serta checksum ke GitHub Release.
+Versi aplikasi untuk rilis ini `0.2.3+5` (tag `v0.2.3`). Workflow `.github/workflows/release-apk.yml` menjalankan `flutter analyze`, `flutter test`, tes/kompilasi Kotlin, lalu `flutter build apk --release` tanpa split ABI dan melampirkan APK serta checksum ke GitHub Release.
 
 Keystore rilis belum disetel untuk build ini. Jika GitHub Actions Secrets signing kosong, Gradle memakai debug signing bawaan dan APK hanya untuk **uji instalasi**, bukan distribusi produksi atau Play Store. Workflow mendukung keystore privat melalui GitHub Actions Secrets; rilis produksi juga memerlukan uji perangkat nyata. APK tidak menyediakan inferensi lokal jika library llama.cpp native tidak disertakan.
 

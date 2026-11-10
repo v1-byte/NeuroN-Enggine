@@ -2,7 +2,7 @@
 
 Ini adalah UI Android NeuroN Engine. Shell dan state aplikasi berada di `lib/main.dart`; halaman utama berada di `lib/app_pages.dart`. Proyek ini adalah entry point APK (`applicationId` `com.neuron.engine`). Dokumentasi lengkap repo ada di [../README.md](../README.md). Catatan migrasi ada di [../docs/MIGRASI_FLUTTER.md](../docs/MIGRASI_FLUTTER.md).
 
-> **Status: UI 0.2.2 alpha.** Shell mobile-first menggantikan tampilan editor-first dan rail kiri lama. Beranda, Chat, Library, Import Center, Activity, serta Workspace tersedia; editor konfigurasi tetap berada di Lainnya → Workspace. Workflow GitHub Actions membangun APK universal pada rilis. APK CI memakai debug signing sampai pemilik menyiapkan keystore privat; bukan untuk distribusi produksi.
+> **Status: UI 0.2.3 alpha.** Shell mobile-first menggantikan tampilan editor-first dan rail kiri lama. Beranda, Chat, Library, Import Center, Activity, serta Workspace tersedia; editor konfigurasi tetap berada di Lainnya → Workspace. Workflow GitHub Actions membangun APK universal pada rilis. APK CI memakai debug signing sampai pemilik menyiapkan keystore privat; bukan untuk distribusi produksi.
 
 ## Menjalankan
 
@@ -43,7 +43,7 @@ flutter_app/
 │  ├─ app/build.gradle                      applicationId, minSdk 26, jniLibs legacy packaging
 │  └─ key.properties                        (tidak di repo) keystore rilis
 ├─ design/                    preview UI v0.2 (mockup ilustratif, JPG)
-├─ pubspec.yaml               nama neuron_engine, versi 0.2.2+4
+├─ pubspec.yaml               nama neuron_engine, versi 0.2.3+5
 └─ analysis_options.yaml      flutter_lints
 ```
 
