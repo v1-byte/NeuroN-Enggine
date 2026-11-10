@@ -11,14 +11,33 @@ const amber = Color(0xFFFFC857);
 const line = Color(0xFF30364E);
 const errorRed = Color(0xFFFF6B6B);
 
-ThemeData neuronTheme() {
+enum NeuronThemePreset { midnight, ocean, amethyst, emerald, amber }
+
+String themeLabel(NeuronThemePreset preset) => switch (preset) {
+      NeuronThemePreset.midnight => 'Midnight',
+      NeuronThemePreset.ocean => 'Ocean',
+      NeuronThemePreset.amethyst => 'Amethyst',
+      NeuronThemePreset.emerald => 'Emerald',
+      NeuronThemePreset.amber => 'Amber',
+    };
+
+Color themeAccent(NeuronThemePreset preset) => switch (preset) {
+      NeuronThemePreset.midnight => blue,
+      NeuronThemePreset.ocean => const Color(0xFF27C6D9),
+      NeuronThemePreset.amethyst => const Color(0xFFB77BFF),
+      NeuronThemePreset.emerald => const Color(0xFF36D399),
+      NeuronThemePreset.amber => const Color(0xFFFFB84D),
+    };
+
+ThemeData neuronTheme([NeuronThemePreset preset = NeuronThemePreset.midnight]) {
   OutlineInputBorder border(Color c) =>
       OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: BorderSide(color: c));
+  final accent = themeAccent(preset);
 
   return ThemeData(
     brightness: Brightness.dark,
     scaffoldBackgroundColor: ink,
-    colorScheme: const ColorScheme.dark(primary: blue, secondary: purple, surface: panel),
+    colorScheme: ColorScheme.dark(primary: accent, secondary: purple, surface: panel),
     useMaterial3: true,
     fontFamily: 'Roboto',
     dividerColor: line,
@@ -29,7 +48,7 @@ ThemeData neuronTheme() {
       contentPadding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
       border: border(line),
       enabledBorder: border(line),
-      focusedBorder: border(blue),
+      focusedBorder: border(accent),
     ),
   );
 }

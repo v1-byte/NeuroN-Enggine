@@ -12,17 +12,28 @@ import 'dialogs.dart';
 import 'feature_workspace.dart';
 import 'inspector.dart';
 import 'theme.dart';
+import 'tutorial.dart';
 
 void main() => runApp(const NeuraApp());
 
-class NeuraApp extends StatelessWidget {
+class NeuraApp extends StatefulWidget {
   const NeuraApp({super.key});
+  @override
+  State<NeuraApp> createState() => _NeuraAppState();
+}
+
+class _NeuraAppState extends State<NeuraApp> {
+  NeuronThemePreset _theme = NeuronThemePreset.midnight;
+
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'NeuroN Engine',
         debugShowCheckedModeBanner: false,
-        theme: neuronTheme(),
-        home: const NeuraHome(),
+        theme: neuronTheme(_theme),
+        home: NeuraHome(
+          themePreset: _theme,
+          onThemeChanged: (value) => setState(() => _theme = value),
+        ),
       );
 }
 
@@ -80,7 +91,9 @@ bool _jsonValid(String s) {
 }
 
 class NeuraHome extends StatefulWidget {
-  const NeuraHome({super.key});
+  const NeuraHome({super.key, required this.themePreset, required this.onThemeChanged});
+  final NeuronThemePreset themePreset;
+  final ValueChanged<NeuronThemePreset> onThemeChanged;
   @override
   State<NeuraHome> createState() => _NeuraHomeState();
 }
@@ -572,6 +585,25 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _openThemePicker() async {
+    final selected = await showModalBottomSheet<NeuronThemePreset>(
+      context: context,
+      backgroundColor: panel,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const ListTile(title: Text('Pilih tema NeuroN', style: TextStyle(fontWeight: FontWeight.w700)), subtitle: Text('Ganti warna aksen untuk tampilan workspace.')),
+        for (final preset in NeuronThemePreset.values) ListTile(
+          leading: CircleAvatar(backgroundColor: themeAccent(preset), radius: 12),
+          title: Text(themeLabel(preset)),
+          trailing: preset == widget.themePreset ? const Icon(Icons.check, color: blue) : null,
+          onTap: () => Navigator.pop(ctx, preset),
+        ),
+        const SizedBox(height: 8),
+      ])),
+    );
+    if (selected != null) widget.onThemeChanged(selected);
+  }
+
   void _openWorkspace(String page) => setState(() {
         _section = 'Workspace';
         _workspacePage = page;
@@ -770,17 +802,30 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
         child: Column(children: [
           _header(),
           Expanded(
-            child: IndexedStack(
-              index: _pageIndex,
-              children: [
-                _dashboardPage(),
-                _chatPage(),
-                _libraryPage(),
-                _importPage(),
-                _morePage(),
-                _workspaceEditorPage(),
-                ActivityPage(logs: List<String>.of(_logs)),
-              ],
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 260),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(begin: const Offset(.025, 0), end: Offset.zero).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: KeyedSubtree(
+                key: ValueKey(_pageIndex),
+                child: IndexedStack(
+                  index: _pageIndex,
+                  children: [
+                    _dashboardPage(),
+                    _chatPage(),
+                    _libraryPage(),
+                    _importPage(),
+                    _morePage(),
+                    _workspaceEditorPage(),
+                    ActivityPage(logs: List<String>.of(_logs)),
+                  ],
+                ),
+              ),
             ),
           ),
         ]),
@@ -909,6 +954,8 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
         onActivity: () => _goTo('Activity'),
         onSettings: _openEngine,
         onFeatures: _openFeatures,
+        onTutorial: () => showNeuroNTutorial(context),
+        onTheme: _openThemePicker,
         onOpenTool: _openWorkspace,
       );
 

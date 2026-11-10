@@ -609,6 +609,8 @@ class MorePage extends StatelessWidget {
     required this.onActivity,
     required this.onSettings,
     required this.onFeatures,
+    required this.onTutorial,
+    required this.onTheme,
     required this.onOpenTool,
   });
 
@@ -616,6 +618,8 @@ class MorePage extends StatelessWidget {
   final VoidCallback onActivity;
   final VoidCallback onSettings;
   final VoidCallback onFeatures;
+  final VoidCallback onTutorial;
+  final VoidCallback onTheme;
   final ValueChanged<String> onOpenTool;
 
   @override
@@ -647,12 +651,16 @@ class MorePage extends StatelessWidget {
             _item(Icons.auto_awesome_outlined, 'Copilot',
                 'Saran patch konfigurasi', () => onOpenTool('Copilot')),
             _item(Icons.school_outlined, 'Training',
-                'Eksperimental; alur Flutter belum tersedia', () => onOpenTool('Latih')),
+                'LoRA/QLoRA dengan model dan dataset pilihan', () => onOpenTool('Latih')),
             _item(Icons.memory_outlined, 'Hardware',
                 'Pengaturan engine lanjutan', () => onOpenTool('Hardware')),
           ]),
           const SizedBox(height: 12),
           _group('PREFERENSI', [
+            _item(Icons.auto_awesome_outlined, 'Tutorial NeuroN',
+                'Panduan singkat import, engine, chat, dan training', onTutorial),
+            _item(Icons.palette_outlined, 'Tema & warna',
+                'Midnight, Ocean, Amethyst, Emerald, atau Amber', onTheme),
             _item(Icons.tune_outlined, 'Fitur & guardrails',
                 'Tools dan aturan keselamatan', onFeatures),
             _item(Icons.settings_outlined, 'Pengaturan engine',

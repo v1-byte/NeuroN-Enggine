@@ -31,6 +31,7 @@ class _TrainingPageState extends State<TrainingPage> {
   String _statusText = '';
   String _method = 'LORA';
   String? _datasetPath;
+  List<Map<String, dynamic>> _localModels = [];
   Map<String, dynamic> _report = const {};
   Map<String, dynamic> _job = const {};
 
@@ -51,6 +52,7 @@ class _TrainingPageState extends State<TrainingPage> {
 
   Future<void> _load() async {
     try {
+      final localModels = await Bridge.localModels();
       final response = await Bridge.trainingLoadConfig();
       final cfg = jsonDecode(response['config'] as String) as Map<String, dynamic>;
       if (!mounted) return;
@@ -65,6 +67,7 @@ class _TrainingPageState extends State<TrainingPage> {
         _datasetPath = (cfg['datasetPath'] as String?)?.isEmpty == true ? null : cfg['datasetPath'] as String?;
         _method = '${cfg['method'] ?? 'LORA'}';
         _keyConfigured = response['apiKeyConfigured'] == true;
+        _localModels = localModels;
         _jobId.text = '${_job['jobId'] ?? ''}';
       });
       if (_datasetPath != null) {
@@ -98,6 +101,63 @@ class _TrainingPageState extends State<TrainingPage> {
     } catch (e) {
       if (mounted) setState(() => _statusText = 'Gagal memuat konfigurasi training: $e');
     }
+  }
+
+  Future<void> _refreshLocalModels() async {
+    try {
+      final models = await Bridge.localModels();
+      if (mounted) setState(() => _localModels = models);
+    } catch (_) {}
+  }
+
+  Future<void> _pickBaseModelFile() async {
+    final selected = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: const ['gguf'], withData: false);
+    final path = selected?.files.single.path;
+    if (path == null) return;
+    await _withBusy(() async {
+      final result = await Bridge.setLocalModel(path);
+      await _refreshLocalModels();
+      if (!mounted) return;
+      setState(() {
+        _baseModel.text = '${result['path'] ?? path}';
+        _statusText = 'Model dasar diimpor ke penyimpanan NeuroN dan dipilih untuk training.';
+      });
+    });
+  }
+
+  Future<void> _chooseStoredModel() async {
+    await _refreshLocalModels();
+    if (!mounted || _localModels.isEmpty) {
+      setState(() => _statusText = 'Belum ada model GGUF tersimpan. Gunakan Impor model.');
+      return;
+    }
+    final selected = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      backgroundColor: panel,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(child: ListView(shrinkWrap: true, children: [
+        const ListTile(title: Text('Pilih model dasar', style: TextStyle(fontWeight: FontWeight.w700)), subtitle: Text('Model yang sudah ada di penyimpanan NeuroN.')),
+        for (final model in _localModels) ListTile(
+          leading: const Icon(Icons.memory_outlined, color: purple),
+          title: Text('${model['name']}', maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: Text(_bytes(model['size']), style: const TextStyle(color: muted, fontSize: 11)),
+          onTap: () => Navigator.pop(ctx, model),
+        ),
+      ])),
+    );
+    if (selected != null && mounted) {
+      setState(() {
+        _baseModel.text = '${selected['path']}';
+        _statusText = 'Model dasar dipilih: ${selected['name']}';
+      });
+    }
+  }
+
+  String _bytes(dynamic value) {
+    final n = value is num ? value.toDouble() : 0;
+    if (n <= 0) return 'ukuran tidak diketahui';
+    if (n >= 1e9) return '${(n / 1e9).toStringAsFixed(1)} GB';
+    return '${(n / 1e6).toStringAsFixed(0)} MB';
   }
 
   Map<String, dynamic> _config() => {
@@ -358,7 +418,13 @@ class _TrainingPageState extends State<TrainingPage> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               _field('URL server trainer', _url, hint: 'https://host.example atau http://IP:PORT'),
               _field('API key server (disimpan terenkripsi)', _apiKey, hint: _keyConfigured ? 'Key sudah tersimpan; kosongkan untuk mempertahankan' : 'Opsional sesuai konfigurasi server', secret: true),
-              _field('Model dasar (ID repo / nama model di server)', _baseModel),
+              _field('Model dasar (ID repo atau path model)', _baseModel, hint: 'Pilih dari NeuroN atau impor GGUF'),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                OutlinedButton.icon(onPressed: _busy ? null : _chooseStoredModel, icon: const Icon(Icons.inventory_2_outlined), label: const Text('Pilih tersimpan')),
+                OutlinedButton.icon(onPressed: _busy ? null : _pickBaseModelFile, icon: const Icon(Icons.file_upload_outlined), label: const Text('Impor model')),
+              ]),
+              const SizedBox(height: 6),
+              const Text('Model lokal dari HP akan diunggah otomatis ke NeuroN Trainer saat mulai training. Pastikan koneksi stabil dan ruang server mencukupi.', style: TextStyle(color: muted, fontSize: 10, height: 1.35)),
               DropdownButtonFormField<String>(
                 value: _method,
                 decoration: const InputDecoration(labelText: 'Metode'),

@@ -106,7 +106,14 @@ internal object TrainingBridge {
         val report = DatasetImporter().inspect(dataset, cfg.method)
         require(report.ok) { "Dataset tidak valid (${report.errorCount} kesalahan); impor ulang dan perbaiki baris yang dilaporkan" }
         val trainer = RemoteTrainer(cfg.remoteTrainerUrl, cfg.remoteTrainerApiKey)
-        val id = runBlocking(Dispatchers.IO) { trainer.startJob(cfg) }
+        val remoteCfg = cfg.baseModel.let { raw ->
+            val local = File(raw)
+            if (local.isFile && local.extension.equals("gguf", true)) {
+                val remoteName = runBlocking(Dispatchers.IO) { trainer.uploadModel(local) }
+                cfg.copy(baseModel = remoteName)
+            } else cfg
+        }
+        val id = runBlocking(Dispatchers.IO) { trainer.startJob(remoteCfg) }
         activeTrainer = trainer
         putState(ctx, JSONObject().put("jobId", id).put("status", "running").put("step", 0).put("total", 0).put("loss", JSONObject.NULL).put("logs", JSONArray()))
         observe(ctx, trainer, id)

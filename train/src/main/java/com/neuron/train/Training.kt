@@ -48,6 +48,16 @@ class RemoteTrainer(baseUrl: String, private val apiKey: String = "") : Trainer 
     }
 
     /** Uploads data and creates the remote job, returning its ID before progress observation. */
+    suspend fun uploadModel(file: File): String = withContext(Dispatchers.IO) {
+        require(file.isFile && file.extension.equals("gguf", true)) { "Model lokal harus berupa file GGUF" }
+        val body = MultipartBody.Builder().setType(MultipartBody.FORM)
+            .addFormDataPart("file", file.name, file.asRequestBody("application/octet-stream".toMediaType())).build()
+        http.newCall(req("/models").post(body).build()).execute().use { r ->
+            if (!r.isSuccessful) throw IOException("Upload model gagal: HTTP ${r.code}")
+            JSONObject(r.body!!.string()).getString("name")
+        }
+    }
+
     suspend fun startJob(cfg: TrainingConfig): String = withContext(Dispatchers.IO) {
         require(base.startsWith("http://") || base.startsWith("https://")) { "URL trainer harus memakai http:// atau https://" }
         require(cfg.method != TrainMethod.RLHF) { "Metode RLHF belum didukung server trainer" }
