@@ -18,7 +18,7 @@ ThemeData neuronTheme() {
   return ThemeData(
     brightness: Brightness.dark,
     scaffoldBackgroundColor: ink,
-    colorScheme: const ColorScheme.dark(primary: purple, secondary: blue, surface: panel),
+    colorScheme: const ColorScheme.dark(primary: blue, secondary: purple, surface: panel),
     useMaterial3: true,
     fontFamily: 'Roboto',
     dividerColor: line,
@@ -29,7 +29,7 @@ ThemeData neuronTheme() {
       contentPadding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
       border: border(line),
       enabledBorder: border(line),
-      focusedBorder: border(purple),
+      focusedBorder: border(blue),
     ),
   );
 }

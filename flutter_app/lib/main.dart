@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'app_pages.dart';
 import 'bridge.dart';
 import 'chat_pane.dart';
 import 'code_editor.dart';
@@ -106,9 +107,14 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
   bool _ready = false;
   bool _railOpen = false;
   bool _findOpen = false;
+  String _section = 'Beranda';
+  EngineSettings? _dashboardEngine;
+  bool _serverRunning = false;
+  List<String> _knowledgeFiles = [];
+  int _knowledgeChunks = 0;
+  bool _ragEnabled = false;
   String _mode =
       'Kode'; // 'Kode' | 'Inspektur' (Inspektur hanya untuk chat/params.json)
-  String _lower = 'Chat'; // 'Chat' | 'Log'
   String? _workspacePage;
   String _engineStatus = 'Memuat…';
 
@@ -181,6 +187,7 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
       _log('INFO', 'Proyek dibuka, ${paths.length} berkas');
       await _open(_chatPath);
       await _refreshEngine();
+      await _refreshDashboardData();
     } catch (e) {
       _log('ERROR', 'Proyek tidak bisa dibuka: $e');
       toast('Proyek tidak bisa dibuka');
@@ -379,6 +386,7 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
       final e = await Bridge.loadEngine();
       if (!mounted) return;
       setState(() {
+        _dashboardEngine = e;
         _engineStatus = e.mode == 'LOCAL'
             ? (e.nativeAvailable
                 ? 'Lokal · ${e.modelPath.split('/').last}'
@@ -389,6 +397,28 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
       });
     } catch (e) {
       _log('ERROR', 'Gagal memuat pengaturan API: $e');
+    }
+  }
+
+  Future<void> _refreshDashboardData() async {
+    try {
+      final values = await Future.wait<dynamic>([
+        Bridge.knowledgeState(),
+        Bridge.serverState(),
+      ]);
+      if (!mounted) return;
+      final rag = Map<String, dynamic>.from(values[0] as Map);
+      final server = Map<String, dynamic>.from(values[1] as Map);
+      setState(() {
+        _knowledgeFiles = ((rag['files'] as List?) ?? const [])
+            .map((file) => file.toString())
+            .toList();
+        _knowledgeChunks = (rag['chunks'] as num?)?.toInt() ?? 0;
+        _ragEnabled = rag['enabled'] == true;
+        _serverRunning = server['running'] == true;
+      });
+    } catch (_) {
+      // Some bridge actions are not available during early app startup.
     }
   }
 
@@ -509,9 +539,61 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
   }
 
   void _openWorkspace(String page) => setState(() {
+        _section = 'Workspace';
         _workspacePage = page;
         _railOpen = true;
       });
+
+  void _goTo(String section) {
+    setState(() {
+      _section = section;
+      if (section == 'Workspace') _workspacePage = null;
+    });
+    if (section == 'Beranda' || section == 'Library') {
+      _refreshDashboardData();
+      _refreshEngine();
+    }
+  }
+
+  Future<void> _showImportTargets() async {
+    final target = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: panel,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 2, 16, 20),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Pilih tujuan import',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.memory_outlined, color: blue),
+              title: const Text('Model lokal · GGUF'),
+              subtitle: const Text('Pilih model untuk engine lokal'),
+              onTap: () => Navigator.pop(ctx, 'Model lokal'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.menu_book_outlined, color: purple),
+              title: const Text('Knowledge / RAG'),
+              subtitle: const Text('Tambahkan dokumen pengetahuan'),
+              onTap: () => Navigator.pop(ctx, 'Data & RAG'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.table_chart_outlined, color: muted),
+              title: const Text('Dataset training'),
+              subtitle: const Text('Import dataset belum tersedia di UI'),
+              enabled: false,
+            ),
+          ]),
+        ),
+      ),
+    );
+    if (target != null) _openWorkspace(target);
+  }
 
   Future<void> _clearChat() async {
     if (_streaming || _clearingChat) return;
@@ -542,6 +624,7 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
       onBack: () {
         setState(() => _workspacePage = null);
         _refreshEngine();
+        _refreshDashboardData();
       },
     );
   }
@@ -556,6 +639,25 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
 
   // ---------- Tampilan ----------
 
+  int get _pageIndex => switch (_section) {
+        'Beranda' => 0,
+        'Chat' => 1,
+        'Library' => 2,
+        'Import' => 3,
+        'Lainnya' => 4,
+        'Workspace' => 5,
+        'Activity' => 6,
+        _ => 0,
+      };
+
+  int get _navigationIndex => switch (_section) {
+        'Beranda' => 0,
+        'Chat' => 1,
+        'Library' => 2,
+        'Import' => 3,
+        _ => 4,
+      };
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -563,32 +665,164 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
         child: Column(children: [
           _header(),
           Expanded(
-            child: Row(children: [
-              _leftRail(),
-              Expanded(
-                child: Column(children: [
-                  _workspacePage == null ? _fileTabs() : _workspaceHeader(),
-                  if (_workspacePage == null) _toolbar(),
-                  if (_workspacePage == null && _findOpen && _mode == 'Kode')
-                    _findBar(),
-                  Expanded(
-                      flex: 11,
-                      child: _workspacePage == null
-                          ? _mainArea()
-                          : _workspaceStatus()),
-                  if (_workspacePage == null) ...[
-                    _statusBar(),
-                    _splitter(),
-                    Expanded(flex: 8, child: _lowerPanel()),
-                  ],
-                ]),
-              ),
-            ]),
+            child: IndexedStack(
+              index: _pageIndex,
+              children: [
+                _dashboardPage(),
+                _chatPage(),
+                _libraryPage(),
+                _importPage(),
+                _morePage(),
+                _workspaceEditorPage(),
+                ActivityPage(logs: List<String>.of(_logs)),
+              ],
+            ),
           ),
         ]),
       ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _navigationIndex,
+        onDestinationSelected: (index) => _goTo(const [
+          'Beranda',
+          'Chat',
+          'Library',
+          'Import',
+          'Lainnya',
+        ][index]),
+        destinations: const [
+          NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home_rounded),
+              label: 'Beranda'),
+          NavigationDestination(
+              icon: Icon(Icons.chat_bubble_outline),
+              selectedIcon: Icon(Icons.chat_bubble),
+              label: 'Chat'),
+          NavigationDestination(
+              icon: Icon(Icons.inventory_2_outlined),
+              selectedIcon: Icon(Icons.inventory_2),
+              label: 'Library'),
+          NavigationDestination(
+              icon: Icon(Icons.file_upload_outlined),
+              selectedIcon: Icon(Icons.file_upload),
+              label: 'Import'),
+          NavigationDestination(
+              icon: Icon(Icons.apps_outlined),
+              selectedIcon: Icon(Icons.apps),
+              label: 'Lainnya'),
+        ],
+      ),
     );
   }
+
+  Widget _dashboardPage() => DashboardPage(
+        engineStatus: _engineStatus,
+        serverRunning: _serverRunning,
+        ragEnabled: _ragEnabled,
+        documentCount: _knowledgeFiles.length,
+        chunkCount: _knowledgeChunks,
+        recentLogs: _logs.reversed.take(3).toList(),
+        onChat: () => _goTo('Chat'),
+        onImport: () => _goTo('Import'),
+        onLibrary: () => _goTo('Library'),
+        onSettings: _openEngine,
+        onWorkspace: () => _goTo('Workspace'),
+        onActivity: () => _goTo('Activity'),
+      );
+
+  Widget _chatPage() => Column(children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(16, 13, 10, 12),
+          decoration: const BoxDecoration(
+              color: panel,
+              border: Border(bottom: BorderSide(color: line))),
+          child: Row(children: [
+            const Icon(Icons.circle, size: 8, color: blue),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                const Text('Percakapan',
+                    style:
+                        TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                Text(_engineStatus,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: muted, fontSize: 10)),
+              ]),
+            ),
+            IconButton(
+              tooltip: 'Atur engine',
+              onPressed: _openEngine,
+              icon: const Icon(Icons.tune, size: 19),
+            ),
+            IconButton(
+              tooltip: 'Percakapan baru',
+              onPressed: _streaming || _clearingChat ? null : _clearChat,
+              icon: const Icon(Icons.add_comment_outlined, size: 19),
+            ),
+          ]),
+        ),
+        Expanded(
+          child: ChatPane(
+            lines: _lines,
+            streaming: _streaming,
+            input: _chatInput,
+            onSend: _send,
+            onStop: _stop,
+            hint: _engineStatus.startsWith('API belum')
+                ? 'Konfigurasikan Base URL dan model terlebih dahulu untuk memulai chat.'
+                : 'Mulai percakapan dengan mengirim pesan.',
+          ),
+        ),
+      ]);
+
+  Widget _libraryPage() => LibraryPage(
+        engine: _dashboardEngine,
+        knowledgeFiles: _knowledgeFiles,
+        chunkCount: _knowledgeChunks,
+        onImport: () => _goTo('Import'),
+        onModelSettings: () => _openWorkspace('Model lokal'),
+        onKnowledgeSettings: () => _openWorkspace('Data & RAG'),
+      );
+
+  Widget _importPage() => ImportCenterPage(
+        onDevice: _showImportTargets,
+        onHuggingFace: () => _openWorkspace('Hugging Face'),
+        onLibrary: () => _goTo('Library'),
+      );
+
+  Widget _morePage() => MorePage(
+        onWorkspace: () {
+          setState(() {
+            _section = 'Workspace';
+            _workspacePage = null;
+          });
+        },
+        onActivity: () => _goTo('Activity'),
+        onSettings: _openEngine,
+        onFeatures: _openFeatures,
+        onOpenTool: _openWorkspace,
+      );
+
+  Widget _workspaceEditorPage() => Row(children: [
+        _leftRail(),
+        Expanded(
+          child: Column(children: [
+            _workspacePage == null ? _fileTabs() : _workspaceHeader(),
+            if (_workspacePage == null) _toolbar(),
+            if (_workspacePage == null && _findOpen && _mode == 'Kode')
+              _findBar(),
+            Expanded(
+                child: _workspacePage == null
+                    ? _mainArea()
+                    : _workspaceStatus()),
+            if (_workspacePage == null) _statusBar(),
+          ]),
+        ),
+      ]);
 
   Widget _header() => Container(
         height: 62,
@@ -632,6 +866,11 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
                 ]),
               ],
             ),
+          ),
+          IconButton(
+            tooltip: 'Pengaturan engine',
+            onPressed: _openEngine,
+            icon: const Icon(Icons.settings_outlined, color: muted),
           ),
         ]),
       );
@@ -941,108 +1180,6 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
     );
   }
 
-  Widget _splitter() => Container(
-        height: 12,
-        color: panel,
-        alignment: Alignment.center,
-        child: Container(
-          width: 38,
-          height: 3,
-          decoration: BoxDecoration(
-              color: muted, borderRadius: BorderRadius.circular(9)),
-        ),
-      );
-
-  Widget _lowerPanel() => Container(
-        color: panel,
-        child: Column(children: [
-          SizedBox(
-            height: 42,
-            child: Row(children: [
-              _lowerTab('Chat', Icons.chat_bubble_outline),
-              _lowerTab('Log', Icons.subject),
-              const Spacer(),
-              if (_lower == 'Chat')
-                IconButton(
-                    tooltip: 'Hapus riwayat chat sesi ini',
-                    onPressed: _streaming ||
-                            _clearingChat ||
-                            (_lines.isEmpty && _convo.isEmpty)
-                        ? null
-                        : _clearChat,
-                    icon: const Icon(Icons.delete_outline, size: 17),
-                    visualDensity: VisualDensity.compact),
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Text(_engineStatus,
-                    style: const TextStyle(color: muted, fontSize: 9)),
-              ),
-            ]),
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: _lower == 'Chat'
-                ? ChatPane(
-                    lines: _lines,
-                    streaming: _streaming,
-                    input: _chatInput,
-                    onSend: () => _send(),
-                    onStop: () => _stop(),
-                    hint:
-                        'Isi Base URL dan model di Pengaturan, lalu kirim pesan.',
-                  )
-                : _logView(),
-          ),
-        ]),
-      );
-
-  Widget _lowerTab(String label, IconData icon) {
-    final active = _lower == label;
-    return TextButton.icon(
-      onPressed: () => setState(() => _lower = label),
-      icon: Icon(icon, size: 16, color: active ? purple : muted),
-      label: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          color: active ? const Color(0xFFF3EDFF) : muted,
-          fontWeight: active ? FontWeight.w600 : FontWeight.normal,
-        ),
-      ),
-      style: TextButton.styleFrom(
-        backgroundColor: active ? const Color(0xFF332B4D) : null,
-        visualDensity: VisualDensity.compact,
-        minimumSize: const Size(0, 32),
-      ),
-    );
-  }
-
-  Widget _logView() {
-    if (_logs.isEmpty) {
-      return const Center(
-          child: Text('Belum ada kejadian',
-              style: TextStyle(color: muted, fontSize: 11)));
-    }
-    return ListView.builder(
-      reverse: true,
-      padding: const EdgeInsets.all(12),
-      itemCount: _logs.length,
-      itemBuilder: (_, i) {
-        final e = _logs[_logs.length - 1 - i];
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: SelectableText(
-            e,
-            style: TextStyle(
-              color: e.contains(' ERROR ') ? errorRed : muted,
-              fontSize: 11,
-              fontFamily: 'monospace',
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
 
 class _RailLabel extends StatelessWidget {

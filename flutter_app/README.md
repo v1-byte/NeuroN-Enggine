@@ -1,8 +1,8 @@
 # NeuroN Engine — UI Flutter (Android)
 
-Ini adalah UI Android NeuroN Engine. Seluruh layar ada di `lib/main.dart`. Proyek ini adalah entry point APK (`applicationId` `com.neuron.engine`). Dokumentasi lengkap repo ada di [../README.md](../README.md). Catatan migrasi ada di [../docs/MIGRASI_FLUTTER.md](../docs/MIGRASI_FLUTTER.md).
+Ini adalah UI Android NeuroN Engine. Shell dan state aplikasi berada di `lib/main.dart`; halaman utama berada di `lib/app_pages.dart`. Proyek ini adalah entry point APK (`applicationId` `com.neuron.engine`). Dokumentasi lengkap repo ada di [../README.md](../README.md). Catatan migrasi ada di [../docs/MIGRASI_FLUTTER.md](../docs/MIGRASI_FLUTTER.md).
 
-> **Status: UI memakai proyek dan bridge Kotlin (belum diverifikasi build/perangkat).** Chat API/lokal, server, RAG, dan pencarian/unduh GGUF Hugging Face kini memiliki alur dasar. Pelatihan dan Copilot belum dihubungkan ke Flutter.
+> **Status: UI 0.2.0 alpha.** Beranda, Chat, Library, Import Center, Activity, dan Workspace telah disusun ulang. Build APK dan uji perangkat untuk revisi ini belum dilakukan. Training, multi-select/review import, URL, cloud storage, dan transfer LAN belum tersedia.
 
 ## Menjalankan
 
@@ -17,13 +17,14 @@ flutter build apk --release     # perlu android/key.properties, lihat ../docs/RE
 flutter analyze
 ```
 
-`flutter analyze`, `flutter test`, dan `flutter build apk` belum pernah dijalankan untuk proyek ini. Lingkungan tempat proyek ini dimigrasikan tidak punya Flutter SDK.
+Perubahan UI 0.2.0 belum diverifikasi dengan `flutter analyze`, `flutter test`, atau `flutter build apk`: lingkungan rilis sumber tidak menyediakan Flutter/Dart maupun Android SDK.
 
 ## Struktur
 
 ```
 flutter_app/
-├─ lib/main.dart              shell: header, rail, editor, panel bawah, state berkas dan chat
+├─ lib/main.dart              shell navigasi, state berkas/chat dan bridge actions
+├─ lib/app_pages.dart         Beranda, Library, Import Center, Activity, Lainnya
 ├─ lib/feature_workspace.dart layar model lokal, server, RAG, Hugging Face, serta status fitur tertunda
 ├─ lib/bridge.dart            pembungkus MethodChannel/EventChannel ke Kotlin
 ├─ lib/code_editor.dart       editor kode dengan nomor baris
@@ -42,7 +43,7 @@ flutter_app/
 │  ├─ app/build.gradle                      applicationId, minSdk 26, jniLibs legacy packaging
 │  └─ key.properties                        (tidak di repo) keystore rilis
 ├─ design/                    mockup statis: flutter_preview_latest.html dan .png
-├─ pubspec.yaml               nama neuron_engine, versi 0.1.0+1
+├─ pubspec.yaml               nama neuron_engine, versi 0.2.0+2
 └─ analysis_options.yaml      flutter_lints
 ```
 

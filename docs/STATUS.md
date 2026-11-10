@@ -1,16 +1,16 @@
 # Status implementasi
 
-## Status UI Flutter aktual (2026-11-09)
+## Status UI Flutter aktual (2026-11-10)
 
-- [x] `flutter analyze` bersih dan tes Flutter lulus: `flutter_app/test/chat_history_test.dart` (4 tes).
-- [ ] APK belum terverifikasi: `flutter build apk --debug` berhenti karena lingkungan tidak memiliki Android SDK. Uji Gradle/Kotlin dan perangkat Android juga belum dilakukan.
-- [x] Modul Kotlin `:model`, `:engine`, `:project`, `:rag`, `:server`, `:hf`, `:train`, dan `:copilot` sudah di-include dalam `flutter_app/android/settings.gradle` dan dependensi app.
-- [x] `LocalServerService` dideklarasikan di manifest Android dengan foreground service type `specialUse`.
-- [x] Alur inti Flutter: proyek dibaca/disimpan melalui `VirtualTree`; API key dipindahkan ke `SecretStore`; riwayat chat dan konteks API disimpan privat di perangkat; draft editor dipulihkan setelah restart dan dihapus setelah save proyek. Autosave draft tidak berlaku untuk `engine/api.json` demi mencegah API key tersimpan sebagai teks biasa.
-- [~] Menu Server/HF/Latih/Copilot dan fitur lanjutan masih memerlukan kontrol Flutter yang memanggil API modul; memasukkan library ke Gradle saja belum membuat alur UI fitur tersebut aktif.
-- [ ] Belum diuji: implementasi Kotlin baru di `ProjectBridge`, build APK debug/release, signing rilis, dan perilaku di perangkat Android.
+- [x] UI shell baru: Beranda, Chat, Library, Import Center, Lainnya, dan Activity; editor project dipindah ke Workspace.
+- [x] Beranda menampilkan status engine, server lokal, knowledge/RAG, dan aktivitas terbaru. Chat dipisahkan dari editor konfigurasi.
+- [x] Import Center mengarahkan pengguna ke pemilih model GGUF, dokumen Knowledge/RAG, atau Hugging Face yang sudah terhubung. Library menampilkan model terpilih dan dokumen knowledge yang terdaftar.
+- [x] Aksen utama diubah ke biru; ungu dipertahankan untuk fitur AI.
+- [~] Multi-select/review import, progress terpusat, URL, cloud storage, transfer LAN, validasi dataset dan alur training penuh belum tersedia. UI menandai sumber/fungsi yang belum terhubung.
+- [ ] Perubahan UI pada commit ini belum dianalisis atau dibangun: lingkungan eksekusi tidak menyediakan Flutter, Dart, atau Android SDK. APK, signing, dan uji perangkat belum dilakukan.
+- [x] Batas keamanan yang ada dipertahankan: API key memakai SecretStore; server lokal berbasis HTTP tetap membutuhkan jaringan tepercaya.
 
-Catatan: bagian di bawah mencatat riwayat implementasi sebelum migrasi dan tidak selalu menggambarkan status UI Flutter saat ini. Peta terkini ada di [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md).
+Catatan: bagian di bawah mencatat riwayat implementasi sebelum migrasi dan tidak selalu menggambarkan status UI Flutter saat ini. Peta terkini ada di [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md) dan [UI_REFRESH.md](UI_REFRESH.md).
 
 ## Riwayat implementasi (sebelum migrasi Flutter)
 - [x] Fase 0: model + validasi, project (simpan atomik), VirtualTree (13 tab editor), UI Workbench

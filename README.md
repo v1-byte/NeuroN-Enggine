@@ -6,7 +6,7 @@
 
 **NeuroN Engine** adalah engine AI lokal untuk Android. Aplikasi ini menjalankan model GGUF di perangkat (llama.cpp), atau memakai API OpenAI-compatible, lalu menyediakan konfigurasi model, RAG, server lokal OpenAI-compatible, copilot untuk memperbaiki konfigurasi, dan pelatihan LoRA lewat server Python.
 
-> **Status: alpha (v0.1.0).** UI Flutter kini memiliki bridge untuk chat API/lokal, kontrol server lokal, RAG, dan pencarian/unduh GGUF Hugging Face. Build APK dan pengujian pada perangkat tetap belum dilakukan; inferensi lokal memerlukan library llama.cpp native yang sesuai ABI. Lihat [Status fitur](#status-fitur) dan [docs/MIGRASI_FLUTTER.md](docs/MIGRASI_FLUTTER.md).
+> **Status: alpha (v0.2.0, source release).** UI Flutter kini memiliki shell Beranda/Chat/Library/Import Center dan menyambungkan halaman yang tersedia untuk model lokal, RAG, server, serta Hugging Face. Revisi ini belum dibangun menjadi APK atau diuji di perangkat. Beberapa sumber dan workflow (URL, cloud storage, LAN, training Flutter) belum tersedia. Inferensi lokal memerlukan library llama.cpp native yang sesuai ABI. Lihat [Status fitur](#status-fitur), [ringkasan perubahan UI](docs/UI_REFRESH.md), dan [docs/MIGRASI_FLUTTER.md](docs/MIGRASI_FLUTTER.md).
 
 ---
 
@@ -37,7 +37,7 @@
 
 | Area | Yang disediakan | Lokasi |
 |---|---|---|
-| **UI Android** | Editor JSON, chat/log, layar model lokal/server/RAG/HF, dialog pengaturan | `flutter_app/` (Flutter) |
+| **UI Android** | Beranda, Chat, Library, Import Center, Activity, Workspace editor; halaman model/server/RAG/HF | `flutter_app/` (Flutter) |
 | **Konfigurasi** | 7 bagian config dalam satu file project: parameter chat, file model, tokenizer, pengetahuan tambahan, pelatihan ulang, hardware, fitur | `model/`, `project/` |
 | **Engine** | Antarmuka `InferenceEngine` dengan dua implementasi: llama.cpp lokal (JNI) dan API OpenAI-compatible | `engine/` |
 | **Hugging Face** | Cari dan unduh model: resume, WorkManager, verifikasi SHA-256, token untuk model gated | `hf/` |
@@ -57,7 +57,7 @@ UI Android sebelumnya ditulis dengan Jetpack Compose di modul `app/`. Sejak 2026
 
 - **Entry point APK** sekarang proyek Flutter. Modul `app/` Compose dihapus. Modul itu sudah tidak punya layar UI sejak sebelum migrasi.
 - **Modul Kotlin library** (`model`, `project`, `hf`, `engine`, `rag`, `train`, `server`, `copilot`) dan **`python/`** tidak berubah.
-- **Identitas seragam:** applicationId `com.neuron.engine`, nama aplikasi "NeuroN Engine", versi `0.1.0+1`.
+- **Identitas seragam:** applicationId `com.neuron.engine`, nama aplikasi "NeuroN Engine", kini versi `0.2.0+2`.
 - **Logo** dikompres dari 415 KB menjadi sekitar 73 KB total dan dipakai sebagai header serta ikon launcher adaptif.
 - **Flutter** tersambung ke project dan modul Kotlin untuk chat API, mode lokal, server, RAG, dan Hugging Face. Pelatihan dan Copilot belum dibuat ulang sebagai alur Flutter.
 
@@ -104,7 +104,7 @@ NeuroNEngine/
 │  ├─ assets/images/            neuron_mark.png (mark "NE" untuk header; masuk APK)
 │  ├─ android/                  host Android: manifest, ikon adaptif, Gradle modul :app
 │  ├─ design/                   mockup statis (HTML + PNG; PNG belum diperbarui)
-│  ├─ pubspec.yaml              nama neuron_engine, versi 0.1.0+1
+│  ├─ pubspec.yaml              nama neuron_engine, versi 0.2.0+2
 │  └─ README.md                 panduan khusus Flutter
 ├─ model/       data class config (AiProject, ChatParams, ModelFiles, ...), validasi, SecretStore
 ├─ project/     simpan/muat project.json, VirtualTree (path file ↔ config), ExplorerSections
