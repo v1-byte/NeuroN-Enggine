@@ -8,7 +8,6 @@ const blue = Color(0xFF468EFF);
 const muted = Color(0xFF9098B1);
 const green = Color(0xFF53D69A);
 const line = Color(0xFF30364E);
-const rail = Color(0xFF141827);
 const errorRed = Color(0xFFFF6B6B);
 
 ThemeData neuronTheme() {
