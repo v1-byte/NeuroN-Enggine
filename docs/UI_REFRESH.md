@@ -1,42 +1,38 @@
-# Penyegaran UI NeuroN Engine — 2026-11-10
+# UI terbaru NeuroN Engine — v0.2.1 alpha
 
-## Hasil penerapan
+## Arah desain
 
-Dua konsep UI diterjemahkan menjadi shell aplikasi yang lebih berorientasi pada alur pengguna:
+UI Android kini memakai shell mobile-first dengan **Beranda, Chat, Library, Import, dan Lainnya** sebagai navigasi utama. Tampilan editor-first bergaya IDE dengan rail permanen di kiri sudah dipensiunkan dari alur utama. Editor konfigurasi tetap tersedia di **Lainnya → Editor project / Workspace**, tanpa rail lama; pemilihan file dilakukan melalui tombol pada header Workspace. Fitur server, model lokal, Hugging Face, Knowledge/RAG, Copilot, Hardware, dan Training tersedia dari menu Tools sesuai status implementasinya.
 
-- Navigasi utama: **Beranda → Chat → Library → Import → Lainnya**.
-- **Beranda** menjadi landing screen yang menampilkan status engine, ringkasan server lokal dan knowledge/RAG, shortcut chat/import, serta kejadian terbaru.
-- **Chat** dipisahkan dari editor konfigurasi dan memperlihatkan status engine di bagian atas.
-- **Library** menampilkan model GGUF terpilih, daftar dokumen knowledge yang dikenal oleh bridge, dan empty state untuk dataset/adapter.
-- **Import Center** membedakan sumber perangkat, Hugging Face, dan folder aplikasi. Import dari perangkat meminta tujuan lebih dahulu (model atau Knowledge/RAG).
-- Editor berkas project dan alat teknis dipindahkan ke **Lainnya → Editor project / Tools**.
-- **Activity** menampilkan log aplikasi yang sudah tersedia. Progress unduhan Hugging Face tetap berada di layar Hugging Face.
-- Warna biru menjadi aksen utama; ungu tetap dipakai untuk fitur AI/Copilot.
+![Mockup ilustratif Beranda NeuroN Engine v0.2](../flutter_app/design/flutter_preview_v0.2.jpg)
 
-Implementasi memakai halaman Flutter baru di `flutter_app/lib/app_pages.dart` dan menghubungkannya ke bridge Kotlin yang telah ada. Tidak ada layanan backend atau permission baru yang ditambahkan.
+Gambar ini adalah mockup visual untuk mendokumentasikan arah UI, bukan screenshot hasil render Flutter atau bukti bahwa semua kontrol telah diuji di perangkat.
 
-## Batas implementasi saat ini
+## Navigasi dan layar
 
-UI hanya mengarahkan ke fungsi yang telah tersedia. Karena itu, fitur berikut masih belum tersedia dan ditandai apa adanya:
+- **Beranda:** status engine, ringkasan server dan knowledge/RAG, shortcut Chat/Import, serta aktivitas terbaru.
+- **Chat:** percakapan berdiri sendiri; pengaturan engine dapat dibuka dari header.
+- **Library:** model lokal dan dokumen knowledge yang terdaftar; Dataset dan Adapter diberi status belum tersedia.
+- **Import:** memisahkan pemilihan dari perangkat, Hugging Face, dan folder aplikasi. Import perangkat meminta tujuan Model GGUF atau Knowledge/RAG.
+- **Lainnya:** pintu masuk Workspace, Activity, tools, guardrails, dan pengaturan.
+- **Workspace:** editor project, pemilih file dalam bottom sheet, toolbar kode/inspektur, serta status validasi JSON.
+- **Activity:** log lokal aplikasi yang tersedia saat ini; progress unduhan HF tetap pada layar Hugging Face.
 
-- Import multi-select, review/validasi sebelum import, deduplikasi SHA-256 lintas sumber, dan Activity manager terpusat.
-- Impor dataset dan wizard training lengkap dari Flutter.
-- Pengunduhan file langsung lewat URL.
-- Konektor OAuth Google Drive, Dropbox, atau OneDrive.
-- Pairing QR dan transfer jaringan lokal.
-- Estimasi ruang/RAM sebelum import, pause/resume universal, checksum review universal, dan operasi Library seperti rename/export/delete.
-- Workflow review diff Copilot di Flutter.
+Biru menjadi aksen aksi utama; ungu dipertahankan untuk fitur AI. Implementasi memakai `flutter_app/lib/app_pages.dart`, `main.dart`, `feature_workspace.dart`, dan bridge Kotlin yang sudah ada; perubahan ini tidak menambah layanan backend atau permission baru.
 
-Sumber **Perangkat ini** menggunakan picker yang sudah ada untuk model GGUF atau dokumen Knowledge/RAG; tidak mengklaim sebagai file browser penuh dengan multi-select atau preview. Download model HF sudah terhubung ke implementasi yang ada, tetapi Activity lintas pekerjaan belum dipusatkan.
+## Batas fitur
 
-## Verifikasi dan rilis
+UI hanya mengaktifkan alur yang benar-benar terhubung. Import multi-select dan review, Activity manager persisten, impor dataset/wizard training Flutter, unduh lewat URL, cloud storage, transfer LAN, operasi Library seperti rename/export/delete, dan review diff Copilot belum tersedia. Inferensi model lokal tetap memerlukan library native llama.cpp yang cocok dengan ABI perangkat.
 
-Versi aplikasi dinaikkan menjadi `0.2.0+2`. Pada lingkungan implementasi ini tidak ditemukan Flutter, Dart, maupun Android SDK. Maka `flutter analyze`, `flutter test`, dan `flutter build apk` tidak dapat dijalankan untuk commit UI ini. Rilis yang dibuat dari perubahan ini adalah **source release** tanpa APK; build/signing dan tes perangkat tetap diperlukan sebelum distribusi biner.
+## APK dan verifikasi
 
-## Saran tahap selanjutnya
+Versi aplikasi untuk rilis ini `0.2.1+3` (tag `v0.2.1`). Workflow `.github/workflows/release-apk.yml` menjalankan `flutter analyze`, `flutter test`, tes/kompilasi Kotlin, lalu `flutter build apk --release` tanpa split ABI dan melampirkan APK serta checksum ke GitHub Release.
 
-1. Jalankan `flutter analyze`, `flutter test`, dan build APK di CI/mesin Android SDK, lalu uji pada perangkat kecil dan tablet.
-2. Buat model data Library dan Activity yang persisten agar riwayat import, status validasi, ukuran/hash, dan tindakan file konsisten antarsumber.
-3. Bangun alur import bertahap: multi-select → review tujuan per berkas → validasi → progress/cancel/retry → simpan ke Library.
-4. Prioritaskan dataset/training Flutter atau Copilot diff review berdasarkan penggunaan nyata; jangan mengaktifkan shortcut sebelum workflow aman dan selesai.
-5. Tambahkan transfer URL/HF dengan inspeksi ukuran, ketersediaan ruang, checksum, HTTP warning, dan pembatalan; cloud/LAN sebaiknya menyusul melalui autentikasi/paired token yang aman.
+Tidak ada keystore rilis di repo atau workflow. Karena itu Gradle memakai debug signing bawaan; APK yang dihasilkan ditujukan untuk **uji instalasi**, bukan distribusi produksi atau Play Store. Rilis produksi memerlukan keystore milik pemilik aplikasi yang dimasukkan melalui GitHub Actions Secrets dan uji perangkat nyata. APK juga belum dapat mengaktifkan inferensi lokal jika library llama.cpp native tidak disediakan.
+
+## Saran tahap lanjut
+
+1. Siapkan keystore rilis privat dan GitHub Actions Secrets sebelum distribusi di luar pengujian.
+2. Jalankan APK pada perangkat kecil dan tablet untuk memeriksa navigasi, keyboard, pemilih file, serta alur chat/import.
+3. Bangun Library/Activity persisten serta alur import bertahap: pilih → review → validasi → progress/cancel/retry → simpan.
+4. Lanjutkan fitur Dataset/Training dan review diff Copilot sebelum mengaktifkan shortcut yang belum tersedia.

@@ -178,7 +178,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
   @override
   Widget build(BuildContext context) {
     final content = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: widget.onBack, icon: const Icon(Icons.arrow_back), label: const Text('Kembali ke editor'))),
+      Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: widget.onBack, icon: const Icon(Icons.arrow_back), label: const Text('Kembali ke Workspace'))),
       switch (widget.page) {
       'Model lokal' => _localPage(),
       'Server' => _serverPage(),

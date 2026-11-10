@@ -2,12 +2,14 @@
 
 ## Status UI Flutter aktual (2026-11-10)
 
-- [x] UI shell baru: Beranda, Chat, Library, Import Center, Lainnya, dan Activity; editor project dipindah ke Workspace.
+- [x] UI shell mobile-first: Beranda, Chat, Library, Import, dan Lainnya; Activity serta editor project berada di jalur sekunder.
+- [x] Rail editor-first ala IDE dihapus. Workspace mempertahankan editor konfigurasi dengan pemilih file pada header; tools tetap dapat dibuka dari Lainnya.
 - [x] Beranda menampilkan status engine, server lokal, knowledge/RAG, dan aktivitas terbaru. Chat dipisahkan dari editor konfigurasi.
 - [x] Import Center mengarahkan pengguna ke pemilih model GGUF, dokumen Knowledge/RAG, atau Hugging Face yang sudah terhubung. Library menampilkan model terpilih dan dokumen knowledge yang terdaftar.
 - [x] Aksen utama diubah ke biru; ungu dipertahankan untuk fitur AI.
 - [~] Multi-select/review import, progress terpusat, URL, cloud storage, transfer LAN, validasi dataset dan alur training penuh belum tersedia. UI menandai sumber/fungsi yang belum terhubung.
-- [ ] Perubahan UI pada commit ini belum dianalisis atau dibangun: lingkungan eksekusi tidak menyediakan Flutter, Dart, atau Android SDK. APK, signing, dan uji perangkat belum dilakukan.
+- [~] Flutter/Dart/Android SDK tidak tersedia di lingkungan eksekusi lokal. Workflow `.github/workflows/release-apk.yml` membangun APK universal dan tes pada GitHub Actions; status build harus diverifikasi sebelum APK dianggap berhasil dirilis.
+- [~] Tanpa keystore privat, Gradle memakai debug signing. APK CI hanya untuk uji instalasi, bukan distribusi produksi; uji perangkat nyata tetap diperlukan.
 - [x] Batas keamanan yang ada dipertahankan: API key memakai SecretStore; server lokal berbasis HTTP tetap membutuhkan jaringan tepercaya.
 
 Catatan: bagian di bawah mencatat riwayat implementasi sebelum migrasi dan tidak selalu menggambarkan status UI Flutter saat ini. Peta terkini ada di [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md) dan [UI_REFRESH.md](UI_REFRESH.md).

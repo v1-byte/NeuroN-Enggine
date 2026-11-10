@@ -2,7 +2,7 @@
 
 Ini adalah UI Android NeuroN Engine. Shell dan state aplikasi berada di `lib/main.dart`; halaman utama berada di `lib/app_pages.dart`. Proyek ini adalah entry point APK (`applicationId` `com.neuron.engine`). Dokumentasi lengkap repo ada di [../README.md](../README.md). Catatan migrasi ada di [../docs/MIGRASI_FLUTTER.md](../docs/MIGRASI_FLUTTER.md).
 
-> **Status: UI 0.2.0 alpha.** Beranda, Chat, Library, Import Center, Activity, dan Workspace telah disusun ulang. Build APK dan uji perangkat untuk revisi ini belum dilakukan. Training, multi-select/review import, URL, cloud storage, dan transfer LAN belum tersedia.
+> **Status: UI 0.2.1 alpha.** Shell mobile-first menggantikan tampilan editor-first dan rail kiri lama. Beranda, Chat, Library, Import Center, Activity, serta Workspace tersedia; editor konfigurasi tetap berada di Lainnya → Workspace. Workflow GitHub Actions membangun APK universal pada rilis. APK CI memakai debug signing sampai pemilik menyiapkan keystore privat; bukan untuk distribusi produksi.
 
 ## Menjalankan
 
@@ -17,7 +17,7 @@ flutter build apk --release     # perlu android/key.properties, lihat ../docs/RE
 flutter analyze
 ```
 
-Perubahan UI 0.2.0 belum diverifikasi dengan `flutter analyze`, `flutter test`, atau `flutter build apk`: lingkungan rilis sumber tidak menyediakan Flutter/Dart maupun Android SDK.
+Build lokal belum dapat dijalankan di lingkungan dokumentasi ini karena Flutter/Dart dan Android SDK tidak terpasang. Untuk memeriksa status build rilis, lihat workflow **Build and publish Android APK** pada GitHub Actions.
 
 ## Struktur
 
@@ -42,8 +42,8 @@ flutter_app/
 │  ├─ app/src/main/res/mipmap-anydpi-v26/  ikon adaptif (latar dari values/colors.xml)
 │  ├─ app/build.gradle                      applicationId, minSdk 26, jniLibs legacy packaging
 │  └─ key.properties                        (tidak di repo) keystore rilis
-├─ design/                    mockup statis: flutter_preview_latest.html dan .png
-├─ pubspec.yaml               nama neuron_engine, versi 0.2.0+2
+├─ design/                    preview UI v0.2 (mockup ilustratif, JPG)
+├─ pubspec.yaml               nama neuron_engine, versi 0.2.1+3
 └─ analysis_options.yaml      flutter_lints
 ```
 
@@ -82,4 +82,4 @@ Skrip ini menulis ulang `assets/images/neuron_mark.png` dan semua `ic_launcher*.
 
 - UI sudah dipecah per berkas di `lib/`. Pindahkan layar fitur ke `lib/screens/` bila alur makin besar.
 - Aturan R8 belum ada. Build APK dan uji shrinker tetap wajib sebelum rilis.
-- `design/flutter_preview_latest.png` masih menampilkan header lama. HTML-nya sudah memakai nama "NeuroN".
+- Preview di `design/flutter_preview_v0.2.jpg` adalah mockup arah desain, bukan screenshot Flutter dari perangkat. Rincian shell dan batas fitur ada di `../docs/UI_REFRESH.md`.

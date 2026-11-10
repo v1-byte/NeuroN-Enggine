@@ -105,7 +105,6 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
   Future<void> _draftWriteQueue = Future<void>.value();
 
   bool _ready = false;
-  bool _railOpen = false;
   bool _findOpen = false;
   String _section = 'Beranda';
   EngineSettings? _dashboardEngine;
@@ -541,7 +540,6 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
   void _openWorkspace(String page) => setState(() {
         _section = 'Workspace';
         _workspacePage = page;
-        _railOpen = true;
       });
 
   void _goTo(String section) {
@@ -616,6 +614,45 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _showWorkspaceFiles() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: panel,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(14, 4, 14, 20),
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(8, 4, 8, 8),
+              child: Text('File Workspace',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+            ),
+            for (final path in _paths)
+              ListTile(
+                dense: true,
+                selected: path == _active,
+                leading: Icon(
+                  path.endsWith('.json')
+                      ? Icons.data_object_outlined
+                      : Icons.description_outlined,
+                  color: path == _active ? blue : muted,
+                ),
+                title: Text(path.split('/').last),
+                subtitle: Text(path.contains('/') ? path.substring(0, path.lastIndexOf('/')) : 'Project'),
+                trailing: path == _active
+                    ? const Icon(Icons.check, color: blue, size: 18)
+                    : null,
+                onTap: () => Navigator.pop(ctx, path),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (selected != null) await _open(selected);
+  }
+
   Widget _workspaceStatus() {
     return FeatureWorkspace(
       key: ValueKey(_workspacePage),
@@ -629,13 +666,46 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
     );
   }
 
-  Widget _workspaceHeader() => Container(
-      height: 40,
-      color: panel,
-      alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: Text(_workspacePage ?? '',
-          style: const TextStyle(fontWeight: FontWeight.w600)));
+  Widget _editorHeader() => Container(
+        height: 62,
+        color: panel,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Row(children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+                color: const Color(0xFF1C2C42),
+                borderRadius: BorderRadius.circular(11)),
+            child: const Icon(Icons.folder_open_outlined, color: blue, size: 19),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Workspace',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                Text(_active ?? 'Pilih file project',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: muted, fontSize: 10)),
+              ],
+            ),
+          ),
+          if (_dirtyActive)
+            const Padding(
+              padding: EdgeInsets.only(right: 4),
+              child: Icon(Icons.circle, color: amber, size: 8),
+            ),
+          IconButton(
+            tooltip: 'Pilih file project',
+            onPressed: _showWorkspaceFiles,
+            icon: const Icon(Icons.folder_copy_outlined, color: blue),
+          ),
+        ]),
+      );
 
   // ---------- Tampilan ----------
 
@@ -807,22 +877,16 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
         onOpenTool: _openWorkspace,
       );
 
-  Widget _workspaceEditorPage() => Row(children: [
-        _leftRail(),
-        Expanded(
-          child: Column(children: [
-            _workspacePage == null ? _fileTabs() : _workspaceHeader(),
-            if (_workspacePage == null) _toolbar(),
-            if (_workspacePage == null && _findOpen && _mode == 'Kode')
-              _findBar(),
-            Expanded(
-                child: _workspacePage == null
-                    ? _mainArea()
-                    : _workspaceStatus()),
-            if (_workspacePage == null) _statusBar(),
-          ]),
-        ),
-      ]);
+  Widget _workspaceEditorPage() {
+    if (_workspacePage != null) return _workspaceStatus();
+    return Column(children: [
+      _editorHeader(),
+      _toolbar(),
+      if (_findOpen && _mode == 'Kode') _findBar(),
+      Expanded(child: _mainArea()),
+      _statusBar(),
+    ]);
+  }
 
   Widget _header() => Container(
         height: 62,
@@ -872,142 +936,6 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
             onPressed: _openEngine,
             icon: const Icon(Icons.settings_outlined, color: muted),
           ),
-        ]),
-      );
-
-  Widget _leftRail() => AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        width: _railOpen ? 226 : 54,
-        color: rail,
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 8),
-        child: Column(children: [
-          _railItem('Berkas', Icons.folder_open_outlined, _railOpen,
-              () => setState(() => _railOpen = !_railOpen),
-              expanded: _railOpen),
-          if (_railOpen) Expanded(child: _fileList()) else const Spacer(),
-          for (final item in const [
-            ('Server', Icons.dns_outlined),
-            ('Hugging Face', Icons.cloud_download_outlined),
-            ('Latih', Icons.school_outlined),
-            ('Copilot', Icons.auto_awesome_outlined),
-            ('Hardware', Icons.memory_outlined),
-            ('Data & RAG', Icons.storage_outlined),
-            ('Vision & Suara', Icons.mic_none_outlined),
-            ('Model lokal', Icons.phone_android_outlined),
-          ])
-            _railItem(item.$1, item.$2, _workspacePage == item.$1,
-                () => _openWorkspace(item.$1),
-                expanded: _railOpen),
-          _railItem('Fitur', Icons.tune_outlined, false, _openFeatures,
-              expanded: _railOpen),
-          _railItem('Pengaturan', Icons.settings_outlined, false, _openEngine,
-              expanded: _railOpen),
-        ]),
-      );
-
-  Widget _railItem(
-          String label, IconData icon, bool selected, VoidCallback onTap,
-          {bool expanded = false}) =>
-      Material(
-        color: selected ? const Color(0xFF2A2442) : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
-          child: SizedBox(
-            height: 42,
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: expanded ? 9 : 0),
-              child: Row(
-                mainAxisAlignment: expanded
-                    ? MainAxisAlignment.start
-                    : MainAxisAlignment.center,
-                children: [
-                  Icon(icon, size: 20, color: selected ? purple : muted),
-                  if (expanded) ...[
-                    const SizedBox(width: 10),
-                    Text(label,
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 11)),
-                    const Spacer(),
-                    if (label == 'Berkas')
-                      Icon(selected ? Icons.expand_less : Icons.expand_more,
-                          size: 17, color: muted),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-
-  Widget _fileList() {
-    final groups = <String, List<String>>{};
-    for (final p in _paths) {
-      final folder =
-          p.contains('/') ? p.substring(0, p.indexOf('/')) : 'lainnya';
-      groups.putIfAbsent(folder, () => []).add(p);
-    }
-    return ListView(
-      padding: EdgeInsets.zero,
-      children: [
-        for (final g in groups.entries) ...[
-          _RailLabel(g.key.toUpperCase()),
-          for (final p in g.value) _fileRow(p),
-        ],
-      ],
-    );
-  }
-
-  Widget _fileRow(String path) {
-    final active = path == _active;
-    final name =
-        path.contains('/') ? path.substring(path.indexOf('/') + 1) : path;
-    return InkWell(
-      onTap: () => _open(path),
-      borderRadius: BorderRadius.circular(7),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-        decoration: BoxDecoration(
-          color: active ? const Color(0xFF2A2442) : Colors.transparent,
-          borderRadius: BorderRadius.circular(7),
-        ),
-        child: Row(children: [
-          Icon(Icons.description_outlined,
-              size: 14, color: active ? purple : muted),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Text(
-              name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontSize: 11,
-                  color: active ? Colors.white : const Color(0xFFBCC5DD)),
-            ),
-          ),
-          if (_isDirty(path)) const Icon(Icons.circle, size: 6, color: purple),
-        ]),
-      ),
-    );
-  }
-
-  Widget _fileTabs() => Container(
-        height: 40,
-        color: panel,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Row(children: [
-          Expanded(
-            child: Text(
-              _active ?? 'Belum ada berkas dipilih',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11),
-            ),
-          ),
-          if (_dirtyActive)
-            const Text('belum disimpan',
-                style: TextStyle(color: purple, fontSize: 10)),
         ]),
       );
 
@@ -1141,9 +1069,27 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
   Widget _mainArea() {
     if (!_ready) return const Center(child: CircularProgressIndicator());
     if (_active == null) {
-      return const Center(
-          child: Text('Pilih berkas lewat Berkas di kiri',
-              style: TextStyle(color: muted)));
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.folder_open_outlined, color: muted, size: 32),
+            const SizedBox(height: 10),
+            const Text('Mulai dari file project',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 5),
+            const Text('Pilih file konfigurasi untuk dilihat atau diedit.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: muted, fontSize: 11)),
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              onPressed: _showWorkspaceFiles,
+              icon: const Icon(Icons.folder_copy_outlined, size: 17),
+              label: const Text('Pilih file'),
+            ),
+          ]),
+        ),
+      );
     }
     if (_mode == 'Inspektur' && _active == _chatPath) {
       return ParamInspector(text: _text, onChanged: _applyText);
@@ -1180,24 +1126,4 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
     );
   }
 
-}
-
-class _RailLabel extends StatelessWidget {
-  const _RailLabel(this.text);
-  final String text;
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(left: 4, top: 11, bottom: 5),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            text,
-            style: const TextStyle(
-                color: muted,
-                fontWeight: FontWeight.bold,
-                fontSize: 9,
-                letterSpacing: .5),
-          ),
-        ),
-      );
 }

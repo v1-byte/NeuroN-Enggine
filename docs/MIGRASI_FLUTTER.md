@@ -120,7 +120,7 @@ Risiko yang harus diperhatikan saat build pertama:
 ## 7. Masalah yang diketahui
 
 - **Typo di logo.** Tulisan di logo sumber berbunyi "NeuroN **Enggine**" (seharusnya "Engine"). Artwork tidak diubah. Di app hanya mark "NE" yang dipakai, jadi typo tidak tampil di UI. Perbaiki di sumber logo sebelum memakai `branding/neuron_logo.png` untuk publikasi.
-- **Mockup PNG lama.** `flutter_app/design/flutter_preview_latest.png` masih menampilkan header lama (kotak "N" dan teks "NeuraN"). HTML-nya sudah diganti namanya; PNG belum dibuat ulang.
+- **Preview UI.** `flutter_app/design/flutter_preview_v0.2.jpg` mendokumentasikan arah desain Beranda v0.2 sebagai mockup ilustratif; itu bukan screenshot hasil render Flutter atau uji perangkat.
 - **Dua catatan penyimpanan rahasia yang bertentangan.** `STATUS.md` (Fase B) menyebut token HF dan API key server sudah terenkripsi lewat `SecretStore`, dan itu benar untuk `ServerPrefs` dan `HfPrefs`. Namun `AiProject.apiKey` (di `engine/api.json` dan `training/train.json`) masih plaintext di file project. Catatan `ENGINE_GAPS.md` poin 10 sudah tidak akurat untuk token HF dan API key server, tetapi masih benar untuk API key di file project.
 - **Dokumen fitur.** Dokumen panduan per fitur (`SERVER.md`, `TRAINING.md`, `COPILOT.md`, `DATASET.md`, `RAG.md`, `VISION_VOICE.md`, `NATIVE.md`, `ON_DEVICE.md`) diberi banner. Isinya masih menjelaskan layar yang belum dibuat ulang di Flutter.
 - **Lisensi belum ditentukan.** Tidak ada berkas `LICENSE`.

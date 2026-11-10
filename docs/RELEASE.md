@@ -17,8 +17,14 @@ cd flutter_app
 flutter build apk --release
 ```
 - Keluaran: `flutter_app/build/app/outputs/flutter-apk/app-release.apk`. Untuk distribusi, ganti namanya menjadi `NeuroN-Engine-release.apk`.
-- Tanpa `key.properties`, build rilis memakai signing debug (`flutter_app/android/app/build.gradle`). Itu hanya untuk uji lokal, **jangan** didistribusikan.
-- Versi diambil dari `flutter_app/pubspec.yaml` (`version: 0.1.0+1` → versionName `0.1.0`, versionCode `1`).
+- Tanpa `key.properties`, build rilis memakai signing debug (`flutter_app/android/app/build.gradle`). Workflow CI v0.2.1 menghasilkan APK untuk **uji instalasi saja**, bukan distribusi produksi.
+- Versi diambil dari `flutter_app/pubspec.yaml` (`version: 0.2.1+3` → versionName `0.2.1`, versionCode `3`).
+
+### Build dan upload melalui GitHub Actions
+
+Workflow `.github/workflows/release-apk.yml` berjalan saat GitHub Release dipublikasikan atau dapat dijalankan manual untuk tag release yang sudah ada. Workflow menjalankan analyze/test Flutter, tes Kotlin, lalu `flutter build apk --release` tanpa `--split-per-abi` sehingga menghasilkan satu APK universal. APK dan file SHA-256 diunggah ke GitHub Release. Tanpa keystore rahasia, nama aset memuat `debug-signed` agar batas signing terlihat jelas.
+
+Untuk signing produksi, isi semua GitHub Actions Secrets berikut: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, dan `ANDROID_KEY_PASSWORD`. Workflow membentuk `key.properties` sementara di runner lalu Gradle menandatangani APK dengan keystore itu. Jika semua secrets kosong, workflow membuat APK debug-signed untuk pengujian; jika hanya sebagian yang diisi, build dihentikan. Jangan pernah mengunggah keystore atau password ke repo.
 
 ## 2. Minify / R8 / ProGuard
 
@@ -45,7 +51,7 @@ flutter build apk --release
 
 ## 4. Uji RAM 6 / 8 / 12 GB
 
-Panel Log di UI Compose lama menampilkan RAM total, RAM tersedia, ABI, dan batas heap saat app dibuka (`ui/diag/Diagnostics.kt`). Fitur ini **belum ada** di UI Flutter; catat kondisi perangkat secara manual sampai fitur itu dibuat ulang.
+Activity Flutter menampilkan log aplikasi yang tersedia, tetapi diagnostik RAM total/tersedia, ABI, dan batas heap seperti layar Compose lama belum dibuat ulang. Catat kondisi perangkat secara manual sampai diagnostik tersebut tersedia.
 
 **Matriks uji** (satu baris per kombinasi, catat hasilnya):
 
@@ -77,27 +83,23 @@ Heuristik ukuran GGUF (sekitar 40% RAM total) hanya titik awal. Ukuran nyata ber
 
 Bagian ini mengikuti fitur yang **benar-benar ada** di UI Flutter. Uji berikut ditambahkan bersamaan dengan integrasi engine ke APK.
 
-Yang sudah bisa diuji sekarang (UI saja, tanpa model):
+Alur yang bisa diuji saat ini:
 1. Buka `params.json`, ubah temperature lewat Inspektur, dan pastikan JSON tetap valid.
 2. Tombol **Rapikan**, **Cari dan ganti**, dan status bar `JSON valid` / `JSON error`.
 3. Muat file JSON dari perangkat, lalu simpan lewat dialog sistem.
-4. Panel Chat (mode simulasi) dan panel Log.
+4. Chat API-compatible, streaming, stop, riwayat Activity, dan pengaturan engine.
+5. Model GGUF, Knowledge/RAG, Server lokal, dan Hugging Face melalui layar Tools; inferensi lokal memerlukan library native yang sesuai ABI.
 
-Yang menunggu integrasi engine (bagian dari rencana, lihat `docs/MIGRASI_FLUTTER.md` bagian 5):
-1. Muat model GGUF dan chat sampai token keluar.
-2. Simpan `chat/params.json`, lalu pastikan perubahan dibaca engine.
-3. Unduh model kecil dari 🤗 Model dan periksa SHA-256.
-4. Server lokal: `curl /health` dan `curl /v1/chat/completions` dari laptop.
-5. Copilot: saran perbaikan dan eval.
-6. Data: pilih file, periksa, dan buat split.
-7. Latih: preflight ON_DEVICE, dan pastikan dialog error muncul bila binary tidak ada.
+Uji pada perangkat nyata tetap wajib untuk memeriksa picker/import, chat, server/RAG/HF, layout pada ukuran layar berbeda, serta operasi model. Inferensi lokal dan training ON_DEVICE memerlukan binary native dan harus dinyatakan belum tersedia bila binary tidak disertakan.
 
 ## 6. Checklist rilis
 
 - [ ] `version:` di `flutter_app/pubspec.yaml` dinaikkan
 - [ ] `flutter analyze` dan `flutter test` lulus (belum dijalankan; lihat `docs/MIGRASI_FLUTTER.md` bagian 6)
-- [ ] `flutter build apk --release` berhasil dengan `key.properties` rilis
-- [ ] APK hanya berisi `arm64-v8a` (jika engine lokal sudah masuk)
+- [ ] GitHub Actions `Build and publish Android APK` lulus analyze, tes, dan build
+- [ ] APK universal dan checksum terlampir di GitHub Release
+- [ ] Keystore signing produksi digunakan (wajib sebelum distribusi produksi; debug signing hanya untuk uji)
+- [ ] ABI APK sesuai binary native yang benar-benar disertakan
 - [ ] Uji fungsi (bagian 5) lulus untuk fitur yang ada di build
 - [ ] Matriks RAM (bagian 4) diisi untuk 6, 8, dan 12 GB
 - [ ] `mapping.txt` disimpan (jika R8 aktif)
@@ -109,5 +111,5 @@ Yang menunggu integrasi engine (bagian dari rencana, lihat `docs/MIGRASI_FLUTTER
 - Vision lokal (mmproj), belum diverifikasi.
 - Runtime ONNX (onnxruntime-genai), belum diintegrasikan.
 - Konversi AWQ/GPTQ, lihat `docs/CONVERT.md`.
-- Integrasi modul Kotlin ke APK Flutter, belum dikerjakan.
+- Fitur native llama.cpp hanya berjalan bila library untuk ABI perangkat disertakan dan diverifikasi.
 - Uji di perangkat nyata belum dilakukan dari lingkungan migrasi.

@@ -1,0 +1,108 @@
+name: Build and publish Android APK
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing GitHub release tag to build and attach the APK to
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release-apk:
+    name: Build universal APK
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          submodules: recursive
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.24.5'
+          cache: true
+
+      - name: Install Android SDK components
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK and CMake
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;26.3.11579264" "cmake;3.22.1"
+
+      - name: Install Flutter dependencies
+        working-directory: flutter_app
+        run: flutter pub get
+
+      - name: Analyze and test Flutter
+        working-directory: flutter_app
+        run: |
+          flutter analyze
+          flutter test
+
+      - name: Test Kotlin modules
+        run: ./gradlew testDebugUnitTest :server:compileDebugKotlin --no-daemon
+
+      - name: Configure release signing when secrets are available
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set +x
+          values=("$ANDROID_KEYSTORE_BASE64" "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" "$ANDROID_KEY_PASSWORD")
+          present=0
+          missing=0
+          for value in "${values[@]}"; do
+            if [ -n "$value" ]; then present=$((present + 1)); else missing=$((missing + 1)); fi
+          done
+          if [ "$present" -eq 0 ]; then
+            echo "APK_SIGNING_LABEL=debug-signed" >> "$GITHUB_ENV"
+            echo "No release keystore configured; APK will use the debug signer for testing only."
+          elif [ "$missing" -ne 0 ]; then
+            echo "Release signing secrets are incomplete." >&2
+            exit 1
+          else
+            KEYSTORE="$GITHUB_WORKSPACE/flutter_app/android/neuron-release.jks"
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+            cat > flutter_app/android/key.properties <<EOF
+          storeFile=$KEYSTORE
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+            echo "APK_SIGNING_LABEL=release-signed" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build universal release APK
+        working-directory: flutter_app
+        run: flutter build apk --release
+
+      - name: Prepare APK and checksum
+        run: |
+          APK="NeuroN-Engine-${RELEASE_TAG}-universal-${APK_SIGNING_LABEL}.apk"
+          cp flutter_app/build/app/outputs/flutter-apk/app-release.apk "$APK"
+          sha256sum "$APK" > "$APK.sha256"
+          echo "APK_FILE=$APK" >> "$GITHUB_ENV"
+
+      - name: Upload APK to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" "$APK_FILE" "$APK_FILE.sha256" --repo "$GITHUB_REPOSITORY" --clobber
