@@ -7,6 +7,7 @@ const purple = Color(0xFF9A72FF);
 const blue = Color(0xFF468EFF);
 const muted = Color(0xFF9098B1);
 const green = Color(0xFF53D69A);
+const amber = Color(0xFFFFC857);
 const line = Color(0xFF30364E);
 const errorRed = Color(0xFFFF6B6B);
 

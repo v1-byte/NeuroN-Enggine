@@ -403,7 +403,7 @@ class _LibraryPageState extends State<LibraryPage> {
   Widget build(BuildContext context) {
     final model = widget.engine?.modelPath ?? '';
     final localModel = model.isNotEmpty ? model.split('/').last : null;
-    final filters = const ['Semua', 'Model', 'Knowledge', 'Dataset', 'Adapter'];
+    const filters = ['Semua', 'Model', 'Knowledge', 'Dataset', 'Adapter'];
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 20, 18, 24),
       children: [
