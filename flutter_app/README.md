@@ -48,7 +48,7 @@ flutter_app/
 │  ├─ app/build.gradle                      applicationId, minSdk 26, jniLibs legacy packaging
 │  └─ key.properties                        (tidak di repo) keystore rilis
 ├─ design/                    preview UI v0.2 (mockup ilustratif, JPG)
-├─ pubspec.yaml               nama neuron_engine, versi 0.2.6+8
+├─ pubspec.yaml               nama neuron_engine, versi 0.2.7+9
 └─ analysis_options.yaml      flutter_lints
 ```
 
