@@ -1,0 +1,84 @@
+plugins {
+    id "com.android.application"
+    id "org.jetbrains.kotlin.android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+// Keystore rilis TIDAK disimpan di repo. Buat android/key.properties (sudah di .gitignore):
+//   storePassword=...
+//   keyPassword=...
+//   keyAlias=neuron
+//   storeFile=/path/ke/neuron-release.jks
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    // Namespace dibedakan dari modul Kotlin (com.neuron.engine) agar kelas R tidak bentrok. applicationId tetap com.neuron.engine.
+    namespace "com.neuron.engine.app"
+    compileSdk flutter.compileSdkVersion
+    ndkVersion flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    defaultConfig {
+        applicationId "com.neuron.engine"
+        minSdk 26   // naik dari 23: modul :model dan :engine mensyaratkan 26
+        targetSdk flutter.targetSdkVersion
+        versionCode flutter.versionCode
+        versionName flutter.versionName
+    }
+
+    // Binary finetune (libllamafinetune.so, lihat docs/ON_DEVICE.md) harus bisa diekstrak
+    // dan dieksekusi dari nativeLibraryDir.
+    packaging {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias keystoreProperties["keyAlias"]
+                keyPassword keystoreProperties["keyPassword"]
+                storeFile file(keystoreProperties["storeFile"])
+                storePassword keystoreProperties["storePassword"]
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // Tanpa key.properties: pakai signing debug. Cukup untuk uji lokal, JANGAN untuk distribusi.
+            signingConfig(keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug)
+        }
+    }
+}
+
+dependencies {
+    // Engine Kotlin dari repo: RemoteApiEngine (:engine) dan AiProject/EngineConfig/SecretStore (:model)
+    implementation project(':model')
+    implementation project(':engine')
+    implementation project(':project')   // ProjectRepository dan VirtualTree (berkas proyek)
+    implementation project(':rag')
+    implementation project(':server')
+    implementation project(':hf')
+    implementation project(':train')
+    implementation project(':copilot')
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3"
+    implementation "androidx.security:security-crypto:1.1.0-alpha06"
+}
+
+flutter {
+    source "../.."
+}

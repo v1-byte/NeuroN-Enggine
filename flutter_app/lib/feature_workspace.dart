@@ -1,0 +1,213 @@
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'bridge.dart';
+import 'theme.dart';
+
+class FeatureWorkspace extends StatefulWidget {
+  const FeatureWorkspace({super.key, required this.page, required this.onLog, required this.onBack});
+  final String page;
+  final void Function(String level, String message) onLog;
+  final VoidCallback onBack;
+  @override
+  State<FeatureWorkspace> createState() => _FeatureWorkspaceState();
+}
+
+class _FeatureWorkspaceState extends State<FeatureWorkspace> {
+  final _query = TextEditingController();
+  final _repo = TextEditingController();
+  final _port = TextEditingController(text: '8080');
+  final _serverKey = TextEditingController();
+  final _hfToken = TextEditingController();
+  bool _busy = false;
+  String _status = '';
+  List<Map<String, dynamic>> _models = [];
+  List<Map<String, dynamic>> _files = [];
+  Map<String, dynamic> _server = {};
+  Map<String, dynamic> _rag = {};
+  String? _repoSelected;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.page == 'Server') _loadServer();
+    if (widget.page == 'Data & RAG') _loadRag();
+  }
+
+  @override
+  void dispose() {
+    _query.dispose();
+    _repo.dispose();
+    _port.dispose();
+    _serverKey.dispose();
+    _hfToken.dispose();
+    super.dispose();
+  }
+
+  Future<void> _run(Future<void> Function() task) async {
+    if (_busy) return;
+    setState(() { _busy = true; _status = ''; });
+    try { await task(); }
+    catch (e) { if (mounted) setState(() => _status = 'Gagal: $e'); widget.onLog('ERROR', '$e'); }
+    finally { if (mounted) setState(() => _busy = false); }
+  }
+
+  Future<void> _loadServer() async {
+    try {
+      final value = await Bridge.serverState();
+      if (!mounted) return;
+      setState(() {
+        _server = value;
+        _port.text = '${value['port'] ?? 8080}';
+        _serverKey.text = '${value['apiKey'] ?? ''}';
+      });
+    } catch (e) { if (mounted) setState(() => _status = 'Server belum dapat diakses: $e'); }
+  }
+
+  Future<void> _loadRag() async {
+    try { final s = await Bridge.knowledgeState(); if (mounted) setState(() => _rag = s); }
+    catch (e) { if (mounted) setState(() => _status = 'RAG belum dapat diakses: $e'); }
+  }
+
+  Future<void> _pickLocalModel() async {
+    final picked = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: const ['gguf']);
+    final path = picked?.files.single.path;
+    if (path == null) return;
+    await _run(() async {
+      final result = await Bridge.setLocalModel(path);
+      final native = result['nativeAvailable'] == true;
+      setState(() => _status = native
+          ? 'Model disimpan. Mode lokal aktif; engine akan memuat model saat chat berikutnya.'
+          : 'Model disimpan, tetapi library native belum tersedia. Build APK dengan llama.cpp (-PwithNative) sebelum inferensi lokal.');
+      widget.onLog('INFO', 'Model GGUF lokal dipilih: ${result['path']}');
+    });
+  }
+
+  Future<void> _searchHf() async => _run(() async {
+    final found = await Bridge.hfSearch(_query.text.trim());
+    setState(() { _models = found; _files = []; _repoSelected = null; });
+    _status = '${found.length} repo GGUF ditemukan';
+  });
+
+  Future<void> _selectRepo(String id) async => _run(() async {
+    final found = await Bridge.hfFiles(id);
+    setState(() { _repo.text = id; _repoSelected = id; _files = found; });
+    _status = '${found.length} file GGUF';
+  });
+
+  Future<void> _download(String repo, String file) async => _run(() async {
+    final result = await Bridge.hfDownload(repo, file);
+    setState(() => _status = 'Unduhan selesai: ${result['path']}\nSHA-256: ${result['verified'] == true ? 'terverifikasi' : 'tidak tersedia dari Hub'}. Mode lokal disiapkan.');
+    widget.onLog('INFO', 'Model Hugging Face selesai diunduh: ${result['path']}');
+  });
+
+  Future<void> _addKnowledge() async {
+    final picked = await FilePicker.platform.pickFiles(type: FileType.custom,
+        allowedExtensions: const ['txt','md','markdown','csv','tsv','json','jsonl','pdf','docx','xml','html','py','kt','java','js','ts','yaml','yml']);
+    final path = picked?.files.single.path;
+    if (path == null) return;
+    await _run(() async {
+      final result = await Bridge.addKnowledgeFile(path);
+      await _loadRag();
+      setState(() => _status = 'Dokumen ditambahkan: ${result['name']}');
+      widget.onLog('INFO', 'Dokumen RAG ditambahkan: ${result['name']}');
+    });
+  }
+
+  Future<void> _index() async => _run(() async {
+    final report = await Bridge.indexKnowledge();
+    await _loadRag();
+    setState(() => _status = 'Indeks selesai: ${report['indexed']} file baru, ${report['skipped']} tidak berubah, ${report['chunks']} chunk. Gagal: ${(report['failed'] as List?)?.join('; ') ?? '-'}');
+    widget.onLog('INFO', 'Indeks pengetahuan selesai (${report['chunks']} chunk)');
+  });
+
+  Future<void> _configureServer() async => _run(() async {
+    final port = int.tryParse(_port.text.trim());
+    if (port == null) throw Exception('Port harus berupa angka.');
+    await Bridge.saveServer(port, _serverKey.text.trim());
+    await Bridge.startServer();
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    await _loadServer();
+    widget.onLog('INFO', 'Server lokal diminta berjalan pada port $port');
+  });
+
+  Future<void> _stopServer() async => _run(() async {
+    await Bridge.stopServer();
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await _loadServer();
+    widget.onLog('INFO', 'Server lokal dihentikan');
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: widget.onBack, icon: const Icon(Icons.arrow_back), label: const Text('Kembali ke editor'))),
+      switch (widget.page) {
+      'Model lokal' => _localPage(),
+      'Server' => _serverPage(),
+      'Data & RAG' => _ragPage(),
+      'Hugging Face' => _hfPage(),
+      'Latih' => _pendingPage(Icons.school_outlined, 'Pelatihan belum dihubungkan', 'Modul DatasetImporter dan RemoteTrainer tersedia di Kotlin, tetapi pemilih dataset, konfigurasi job, progres, pembatalan, dan pengambilan adapter belum diorkestrasi dari Flutter.'),
+      'Copilot' => _pendingPage(Icons.auto_awesome_outlined, 'Copilot belum dihubungkan', 'Modul CopilotAgent dan patch/diff tersedia. UI Flutter masih perlu alur permintaan saran, tinjauan diff per berkas, validasi konflik, terima/tolak, dan evaluasi.'),
+      'Hardware' => _pendingPage(Icons.memory_outlined, 'Hardware', 'Konfigurasi saat ini bisa diubah melalui hardware/engine.json. Editor hardware terstruktur dan pemeriksaan kompatibilitas perangkat belum tersedia.'),
+      _ => _pendingPage(Icons.info_outline, widget.page, 'Fitur ini belum memiliki layar aktif.'),
+      },
+    ]);
+    return ColoredBox(color: ink, child: Stack(children: [
+      Positioned.fill(child: SingleChildScrollView(padding: const EdgeInsets.all(14), child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 720), child: content)))),
+      if (_busy) const Positioned(top: 0, left: 0, right: 0, child: LinearProgressIndicator(minHeight: 2)),
+    ]));
+  }
+
+  Widget _card(String title, String detail, {Widget? child, IconData? icon}) => Card(color: panel, child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Row(children: [if (icon != null) ...[Icon(icon, color: purple), const SizedBox(width: 9)], Expanded(child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)))]),
+    const SizedBox(height: 8), Text(detail, style: const TextStyle(color: muted, height: 1.4, fontSize: 12)),
+    if (child != null) ...[const SizedBox(height: 14), child],
+  ])));
+
+  Widget _message() => _status.isEmpty ? const SizedBox.shrink() : Container(width: double.infinity, margin: const EdgeInsets.only(top: 10), padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: panel2, borderRadius: BorderRadius.circular(9)), child: SelectableText(_status, style: const TextStyle(fontSize: 11, height: 1.4)));
+
+  Widget _localPage() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    _card('LLama.cpp lokal', 'Pilih file GGUF dari perangkat. File disalin ke penyimpanan privat aplikasi dan chat beralih ke mode lokal.', icon: Icons.phone_android_outlined, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      FilledButton.icon(onPressed: _busy ? null : _pickLocalModel, icon: const Icon(Icons.folder_open), label: const Text('Pilih model GGUF')),
+      const SizedBox(height: 8), const Text('Catatan: inferensi memerlukan libneuron_llama.so yang dibangun untuk ABI perangkat. Model besar dapat membutuhkan RAM dan waktu muat yang tinggi.', style: TextStyle(fontSize: 11, color: muted)),
+    ])), _message(),
+  ]);
+
+  Widget _serverPage() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    _card('Server OpenAI-compatible', 'Mengekspos API lokal di perangkat. Lindungi endpoint dengan API key; klien pada jaringan yang sama dapat mengaksesnya.', icon: Icons.dns_outlined, child: Column(children: [
+      TextField(controller: _port, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Port (1024–65535)')),
+      TextField(controller: _serverKey, obscureText: true, decoration: const InputDecoration(labelText: 'API key (minimal 8 karakter)')),
+      const SizedBox(height: 12), Wrap(spacing: 8, children: [
+        FilledButton.icon(onPressed: _busy ? null : _configureServer, icon: const Icon(Icons.play_arrow), label: const Text('Simpan & mulai')),
+        OutlinedButton.icon(onPressed: _busy ? null : _stopServer, icon: const Icon(Icons.stop), label: const Text('Hentikan')),
+        TextButton(onPressed: _busy ? null : _loadServer, child: const Text('Segarkan')),
+      ]),
+      const SizedBox(height: 8), Align(alignment: Alignment.centerLeft, child: Text((_server['running'] == true ? 'Aktif: ${_server['address'] ?? 'menunggu alamat'}' : 'Tidak aktif') + ((_server['error'] == null) ? '' : '\nError: ${_server['error']}'), style: TextStyle(color: _server['running'] == true ? Colors.greenAccent : muted, fontSize: 12))),
+      const SizedBox(height: 6), const Text('Perangkat klien harus memakai URL yang tampil dan Bearer token yang disetel. Endpoint HTTP tidak mengenkripsi lalu lintas.', style: TextStyle(fontSize: 11, color: muted)),
+    ])), _message(),
+  ]);
+
+  Widget _ragPage() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    _card('Dokumen pengetahuan', 'Tambahkan file teks, Markdown, PDF, DOCX, CSV, atau kode (maksimum 25 MB per file). File disalin ke penyimpanan aplikasi.', icon: Icons.storage_outlined, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Wrap(spacing: 8, children: [FilledButton.icon(onPressed: _busy ? null : _addKnowledge, icon: const Icon(Icons.add), label: const Text('Tambah dokumen')), OutlinedButton.icon(onPressed: _busy ? null : _index, icon: const Icon(Icons.manage_search), label: const Text('Buat / perbarui indeks'))]),
+      const SizedBox(height: 10), Text('Status: ${(_rag['files'] as List?)?.length ?? 0} dokumen · ${_rag['chunks'] ?? 0} chunk · RAG ${_rag['enabled'] == true ? 'aktif' : 'nonaktif'}', style: const TextStyle(fontSize: 12, color: muted)),
+      const SizedBox(height: 7), if ((_rag['files'] as List?)?.isNotEmpty == true) ...[for (final file in (_rag['files'] as List).take(30)) Text('• ${file.toString().split('/').last}', style: const TextStyle(fontSize: 11, color: Colors.white70))],
+      const SizedBox(height: 8), const Text('Embeddings memakai engine yang dipilih. Untuk engine API, pastikan endpoint mendukung /v1/embeddings; jika tidak, indeks tidak akan terbentuk.', style: TextStyle(fontSize: 11, color: muted)),
+    ])), _message(),
+  ]);
+
+  Widget _hfPage() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    _card('Hugging Face · GGUF', 'Cari repo model publik dan unduh satu file GGUF. File hasil unduh akan menjadi model lokal terpilih. Token hanya diperlukan untuk repo gated/privat dan disimpan terenkripsi.', icon: Icons.cloud_download_outlined, child: Column(children: [
+      TextField(controller: _hfToken, obscureText: true, decoration: const InputDecoration(labelText: 'Token HF (opsional)', hintText: 'hf_…')),
+      Align(alignment: Alignment.centerLeft, child: TextButton(onPressed: _busy ? null : () => _run(() async { await Bridge.saveHfToken(_hfToken.text.trim()); setState(() => _status = 'Token disimpan terenkripsi.'); }), child: const Text('Simpan token'))),
+      Row(children: [Expanded(child: TextField(controller: _query, onSubmitted: (_) => _searchHf(), decoration: const InputDecoration(labelText: 'Cari model', hintText: 'llama 3 gguf'))), const SizedBox(width: 8), IconButton.filled(onPressed: _busy ? null : _searchHf, icon: const Icon(Icons.search))]),
+      if (_models.isNotEmpty) ...[const SizedBox(height: 8), for (final model in _models) ListTile(dense: true, contentPadding: EdgeInsets.zero, title: Text('${model['id']}', style: const TextStyle(fontSize: 12)), subtitle: Text('Unduhan ${model['downloads'] ?? 0} · likes ${model['likes'] ?? 0}', style: const TextStyle(color: muted, fontSize: 10)), trailing: const Icon(Icons.chevron_right), onTap: _busy ? null : () => _selectRepo('${model['id']}'))],
+      if (_repoSelected != null) ...[const Divider(), Text('File GGUF · $_repoSelected', style: const TextStyle(fontWeight: FontWeight.bold)), for (final file in _files) ListTile(dense: true, contentPadding: EdgeInsets.zero, title: Text('${file['name']}', style: const TextStyle(fontSize: 11)), subtitle: Text(_bytes(file['size']), style: const TextStyle(color: muted, fontSize: 10)), trailing: IconButton(tooltip: 'Unduh file ini', onPressed: _busy ? null : () => _download(_repoSelected!, '${file['name']}'), icon: const Icon(Icons.download, color: purple)))],
+      const SizedBox(height: 5), const Text('Periksa ukuran file dan ruang kosong sebelum mengunduh. Progres per-byte belum ditampilkan pada layar ini.', style: TextStyle(fontSize: 11, color: muted)),
+    ])), _message(),
+  ]);
+
+  String _bytes(dynamic value) { final n = value is num ? value.toDouble() : 0.0; if (n <= 0) return 'ukuran tidak diketahui'; if (n >= 1e9) return '${(n / 1e9).toStringAsFixed(1)} GB'; return '${(n / 1e6).toStringAsFixed(0)} MB'; }
+
+  Widget _pendingPage(IconData icon, String title, String detail) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [_card(title, detail, icon: icon), _message()]);
+}

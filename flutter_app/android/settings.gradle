@@ -1,0 +1,29 @@
+pluginManagement {
+    def flutterSdkPath = {
+        def properties = new Properties()
+        file("local.properties").withInputStream { properties.load(it) }
+        def flutterSdkPath = properties.getProperty("flutter.sdk")
+        assert flutterSdkPath != null, "flutter.sdk belum diatur; jalankan flutter pub get dengan Flutter SDK terpasang."
+        return flutterSdkPath
+    }()
+    includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+    repositories { google(); mavenCentral(); gradlePluginPortal() }
+}
+plugins {
+    id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+    id "com.android.application" version "8.7.3" apply false
+    id "com.android.library" version "8.7.3" apply false
+    id "org.jetbrains.kotlin.android" version "2.0.21" apply false
+    id "org.jetbrains.kotlin.plugin.serialization" version "2.0.21" apply false
+}
+include ":app"
+// Modul Kotlin dari repo induk yang dipakai aplikasi. Lihat docs/MIGRASI_FLUTTER.md bagian 5.
+include ":model", ":engine", ":project", ":rag", ":server", ":hf", ":train", ":copilot"
+project(":model").projectDir = new File(settingsDir, "../../model")
+project(":engine").projectDir = new File(settingsDir, "../../engine")
+project(":project").projectDir = new File(settingsDir, "../../project")
+project(":rag").projectDir = new File(settingsDir, "../../rag")
+project(":server").projectDir = new File(settingsDir, "../../server")
+project(":hf").projectDir = new File(settingsDir, "../../hf")
+project(":train").projectDir = new File(settingsDir, "../../train")
+project(":copilot").projectDir = new File(settingsDir, "../../copilot")
