@@ -6,7 +6,7 @@
 
 **NeuroN Engine** adalah engine AI lokal untuk Android. Aplikasi ini menjalankan model GGUF di perangkat (llama.cpp), atau memakai API OpenAI-compatible, lalu menyediakan konfigurasi model, RAG, server lokal OpenAI-compatible, copilot untuk memperbaiki konfigurasi, dan pelatihan LoRA lewat server Python.
 
-> **Status: alpha (v0.2.5).** UI Flutter memakai shell mobile-first Beranda/Chat/Library/Import/Lainnya, preset tema, animasi navigasi, dan Tutorial NeuroN. Import Center dapat mengambil GGUF dari Download/internal storage atau Hugging Face; model tersimpan dapat dipilih ulang dan dipakai sebagai model training. Auto-update mengecek GitHub Releases dan membuka installer Android setelah konfirmasi. APK produksi tetap wajib ditandatangani dengan keystore privat. Lihat [Status fitur](#status-fitur), [ringkasan perubahan UI](docs/UI_REFRESH.md), dan [docs/RELEASE.md](docs/RELEASE.md).
+> **Status: alpha (v0.2.6).** UI Flutter memakai shell mobile-first Beranda/Chat/Library/Import/Lainnya, preset tema, animasi navigasi, dan Tutorial NeuroN. Import Center dapat mengambil GGUF dari Download/internal storage atau Hugging Face; model tersimpan dapat dipilih ulang dan dipakai sebagai model training. Auto-update mengecek GitHub Releases dan membuka installer Android setelah konfirmasi. APK produksi tetap wajib ditandatangani dengan keystore privat. Lihat [Status fitur](#status-fitur), [ringkasan perubahan UI](docs/UI_REFRESH.md), dan [docs/RELEASE.md](docs/RELEASE.md).
 
 ---
 
