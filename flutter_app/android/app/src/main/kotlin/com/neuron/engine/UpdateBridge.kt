@@ -16,8 +16,6 @@ import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
-import com.neuron.engine.app.BuildConfig
-
 internal object UpdateBridge {
     private const val CHANNEL = "neuron/update"
     private const val RELEASE_API = "https://api.github.com/repos/v1-byte/NeuroN-Enggine/releases/latest"
