@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'bridge.dart';
 import 'theme.dart';
+import 'training_page.dart';
 
 class FeatureWorkspace extends StatefulWidget {
   const FeatureWorkspace({super.key, required this.page, required this.onLog, required this.onBack});
@@ -218,7 +219,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
       'Server' => _serverPage(),
       'Data & RAG' => _ragPage(),
       'Hugging Face' => _hfPage(),
-      'Latih' => _pendingPage(Icons.school_outlined, 'Pelatihan belum dihubungkan', 'Modul DatasetImporter dan RemoteTrainer tersedia di Kotlin, tetapi pemilih dataset, konfigurasi job, progres, pembatalan, dan pengambilan adapter belum diorkestrasi dari Flutter.'),
+      'Latih' => TrainingPage(onLog: widget.onLog),
       'Copilot' => _copilotPage(),
       'Hardware' => _pendingPage(Icons.memory_outlined, 'Hardware', 'Konfigurasi saat ini bisa diubah melalui hardware/engine.json. Editor hardware terstruktur dan pemeriksaan kompatibilitas perangkat belum tersedia.'),
       _ => _pendingPage(Icons.info_outline, widget.page, 'Fitur ini belum memiliki layar aktif.'),

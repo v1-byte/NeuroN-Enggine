@@ -1,34 +1,30 @@
-# Layar Latih: Latih, grafik loss, sambung job, dan unduh hasil (langkah 19)
+# Layar Latih: Training remote, progres, sambung job, dan unduh hasil (langkah 19)
 
-> **Status UI Flutter (2026-11-10):** halaman Training tersedia sebagai placeholder, tetapi workflow dataset, konfigurasi job, progres, pembatalan, dan pengambilan adapter belum dihubungkan. Instruksi langkah demi langkah di bawah tidak dapat dilakukan melalui APK Flutter saat ini. Lihat [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md).
+> **Status UI Flutter (2026-11-10):** workflow training remote tahap awal kini tersedia: konfigurasi, impor/validasi dataset, start, polling progres/log, stop/sambung, unduh ZIP, dan unduh LoRA GGUF. Belum ada split train/val atau grafik loss, ON_DEVICE belum tersedia, dan alur belum dibuild/diuji di perangkat/server. API key disimpan melalui `SecretStore`, bukan di `training/train.json`.
 
 
 ## 1. Membuka layar
-Di editor, buka `training/train.json` lalu tekan **Latih →**. Tombol Jalankan di tab itu sudah tidak ada lagi,
-supaya hanya ada satu jalur untuk memulai training.
+Buka **Lainnya → Training** atau **Import Center → Dataset training**.
 
 ## 2. Syarat sebelum Latih
-- `target` = `REMOTE_SERVER` dan `remoteTrainerUrl` terisi. `ON_DEVICE` belum tersedia (langkah 20).
-- `datasetPath` sudah terisi. Caranya: buka **📚 Data** lalu buat split.
-- Tidak ada perubahan belum disimpan di editor. Tombol Latih dikunci bila ada.
+- Atur URL server dan model dasar. Build rilis memerlukan HTTPS; HTTP hanya untuk debug/LAN tepercaya.
+- Pilih metode dan dataset JSONL/JSON/CSV; dataset harus memiliki nol error validasi. File disalin ke direktori privat app.
+- API key bersifat opsional bila server tidak memerlukannya; bila disediakan, key disimpan terenkripsi di `SecretStore`.
 
 ## 3. Alur
-1. **Latih** mengunggah train (dan val bila ada) sebagai `<nama-dataset>_train.jsonl` dan `<nama-dataset>_val.jsonl`,
-   lalu memulai job di server dan memantau progresnya.
-2. **Grafik loss** menggambar loss train (hijau) dan eval loss (oranye). Eval loss hanya ada bila val dipakai.
-3. **Log** menampilkan 300 baris terakhir.
-4. Setelah status **selesai**, unduh hasil:
+1. **Mulai training** mengunggah dataset bersih sebagai data train, membuat job remote, lalu memantau progresnya.
+2. **Progres/log** diperbarui melalui polling bridge lokal; maksimal 300 baris log ditampilkan.
+3. Setelah status **done**, unduh hasil:
    - **Adapter (.zip)** disimpan di `getExternalFilesDir("adapters")/<job>.zip`.
    - **LoRA (.gguf)** disimpan di `getExternalFilesDir("models")/<job>-lora.gguf`. Server mengonversi adapter dengan llama.cpp, jadi server perlu `LLAMA_CPP_DIR`.
-5. **Pakai sebagai LoRA di model** menulis path LoRA ke `model/lora.json` (`loraPath`). Engine dimuat ulang dengan adapter itu saat chat berikutnya.
+4. **Unduh & pakai LoRA GGUF** menyimpan file di folder models dan menulis path-nya ke `model/lora.json`; konversi memerlukan `LLAMA_CPP_DIR` pada server.
 
 ## 4. Stop dan sambung
-- **Stop** berhenti memantau dan mengirim perintah cancel ke server. Job tetap bisa dicek di server.
-- Jika app ditutup saat training berjalan, job tetap jalan di server. Masukkan **ID job** di kartu Job, lalu tekan **Sambung**.
-  ID job tampil di layar setelah Latih dimulai. Simpan ID ini bila perlu.
+- **Stop** mengirim permintaan cancel ke server. Periksa status server sesudahnya karena pembatalan bergantung pada proses trainer.
+- Masukkan **ID job** yang tampil di kartu Job lalu tekan **Sambung** untuk membaca event server kembali setelah app ditutup.
 
 ## 5. Batasan
-- **Riwayat setelah sambung bergantung pada server.** Layar menampilkan event yang dikirim server saat disambung. Apakah server mengirim ulang event lama belum diverifikasi.
-- **Grafik tidak disimpan** setelah app ditutup. Setelah sambung, grafik dibangun ulang dari event yang diterima.
-- **Satu job dipantau sekali waktu.** Mulai job baru hanya bila tidak ada yang sedang berjalan.
-- **Belum dikompilasi dan belum diuji** di perangkat maupun di server.
+- Dataset sekarang langsung dipakai sebagai train; split validation dan grafik loss belum tersedia.
+- Penyambungan mengandalkan job/event yang masih disimpan oleh proses server Python; server dapat mengirim ulang log lama.
+- Endpoint adapter ZIP/GGUF dan kompatibilitas metode tetap harus diuji terhadap versi server aktual.
+- Implementasi belum dikompilasi atau diuji di perangkat Android maupun server remote.

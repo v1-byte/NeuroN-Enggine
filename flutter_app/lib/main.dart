@@ -580,11 +580,11 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
               subtitle: const Text('Tambahkan dokumen pengetahuan'),
               onTap: () => Navigator.pop(ctx, 'Data & RAG'),
             ),
-            const ListTile(
-              leading: Icon(Icons.table_chart_outlined, color: muted),
-              title: Text('Dataset training'),
-              subtitle: Text('Import dataset belum tersedia di UI'),
-              enabled: false,
+            ListTile(
+              leading: const Icon(Icons.table_chart_outlined, color: purple),
+              title: const Text('Dataset training'),
+              subtitle: const Text('Pilih, validasi, lalu siapkan dataset untuk training'),
+              onTap: () => Navigator.pop(ctx, 'Latih'),
             ),
           ]),
         ),

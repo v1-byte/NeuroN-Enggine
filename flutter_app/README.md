@@ -2,7 +2,7 @@
 
 Ini adalah UI Android NeuroN Engine. Shell dan state aplikasi berada di `lib/main.dart`; halaman utama berada di `lib/app_pages.dart`. Proyek ini adalah entry point APK (`applicationId` `com.neuron.engine`). Dokumentasi lengkap repo ada di [../README.md](../README.md). Catatan migrasi ada di [../docs/MIGRASI_FLUTTER.md](../docs/MIGRASI_FLUTTER.md).
 
-> **Status: UI Flutter alpha.** Beranda, Chat, Library, Import Center, Activity, Workspace, Hugging Face, RAG, Copilot dasar, dan Server lokal tersedia dengan tingkat integrasi berbeda. Training masih placeholder. Build APK/perangkat belum diverifikasi dalam audit saat ini; workflow publikasi release membutuhkan signing secrets valid dan memverifikasi signature sebelum upload.
+> **Status: UI Flutter alpha.** Beranda, Chat, Library, Import Center, Activity, Workspace, Hugging Face, RAG, Copilot dasar, Server lokal, dan training remote tahap awal tersedia dengan tingkat integrasi berbeda. Training remote belum dibuild/diuji di perangkat atau server; split train/val dan training ON_DEVICE belum tersedia. Workflow publikasi release membutuhkan signing secrets valid dan memverifikasi signature sebelum upload.
 
 ## Menjalankan
 
@@ -25,7 +25,8 @@ Build Android harus diverifikasi pada mesin yang memiliki Flutter, Android SDK, 
 flutter_app/
 ├─ lib/main.dart              shell navigasi, state berkas/chat dan bridge actions
 ├─ lib/app_pages.dart         Beranda, Library, Import Center, Activity, Lainnya
-├─ lib/feature_workspace.dart layar model lokal, server, RAG, Hugging Face, serta status fitur tertunda
+├─ lib/feature_workspace.dart layar model lokal, server, RAG, Hugging Face, serta tools workspace
+├─ lib/training_page.dart     workflow training remote Flutter
 ├─ lib/bridge.dart            pembungkus MethodChannel/EventChannel ke Kotlin
 ├─ lib/code_editor.dart       editor kode dengan nomor baris
 ├─ lib/inspector.dart         Inspektur untuk chat/params.json
@@ -39,6 +40,7 @@ flutter_app/
 │  ├─ app/src/main/kotlin/com/neuron/engine/MainActivity.kt
 │  ├─ app/src/main/kotlin/com/neuron/engine/NeuronBridge.kt   jembatan chat (EventChannel neuron/chat)
 │  ├─ app/src/main/kotlin/com/neuron/engine/ProjectBridge.kt  berkas proyek, pengaturan API, fitur (MethodChannel neuron/project)
+│  ├─ app/src/main/kotlin/com/neuron/engine/TrainingBridge.kt dataset dan job training remote
 │  ├─ app/src/main/res/mipmap-*/           ikon launcher dan lapisan depan ikon adaptif
 │  ├─ app/src/main/res/mipmap-anydpi-v26/  ikon adaptif (latar dari values/colors.xml)
 │  ├─ app/build.gradle                      applicationId, minSdk 26, jniLibs legacy packaging
@@ -60,7 +62,7 @@ flutter_app/
 | Log | Kejadian nyata dari aplikasi (simpan, chat, error) |
 | Copilot | Meminta saran dan menerapkan patch yang ditinjau tersedia; evaluasi lanjutan dan alur undo/reject bertingkat belum tersedia |
 | Hugging Face | Cari repo GGUF, lihat file, unduh, progress, cancel, dan verifikasi checksum bila tersedia |
-| Latih | UI dataset, job/progres, stop, dan unduh adapter belum dihubungkan |
+| Latih | Impor/validasi dataset, konfigurasi remote, start/progres/log/stop/sambung, unduh ZIP/LoRA GGUF; split train/val dan ON_DEVICE belum tersedia |
 | Server | Pengaturan port/key, pembuatan key acak 256-bit, konfirmasi risiko HTTP, start/stop/status tersedia; inbound tetap HTTP tanpa TLS |
 | Data & RAG | Impor dokumen, indeks SQLite, retrieval chat tersedia; hapus dokumen/progres belum ada |
 | Hardware | Inspector belum tersedia; konfigurasi bisa diedit melalui `hardware/engine.json` |

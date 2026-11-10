@@ -59,7 +59,7 @@ UI Android sebelumnya ditulis dengan Jetpack Compose di modul `app/`. Sejak 2026
 - **Modul Kotlin library** (`model`, `project`, `hf`, `engine`, `rag`, `train`, `server`, `copilot`) dan **`python/`** tidak berubah.
 - **Identitas seragam:** applicationId `com.neuron.engine`, nama aplikasi "NeuroN Engine", versi `0.2.5+7`.
 - **Logo** dikompres dari 415 KB menjadi sekitar 73 KB total dan dipakai sebagai header serta ikon launcher adaptif.
-- **Flutter** tersambung ke project dan modul Kotlin untuk chat API, mode lokal (JNI llama.cpp arm64), server, RAG, Hugging Face, dan Copilot. Pelatihan belum dibuat ulang sebagai alur Flutter.
+- **Flutter** tersambung ke project dan modul Kotlin untuk chat API, mode lokal (JNI llama.cpp arm64), server, RAG, Hugging Face, Copilot, dan training remote tahap awal. Training remote belum diuji melalui build/perangkat; ON_DEVICE belum tersedia sebagai alur Flutter.
 
 Rincian lengkap (peta layar lama → Flutter, perubahan Gradle, risiko, dan langkah berikutnya) ada di [docs/MIGRASI_FLUTTER.md](docs/MIGRASI_FLUTTER.md).
 
@@ -147,8 +147,8 @@ Legenda: **Ada** = tersedia di UI; **Terhubung (dasar)** = memanggil modul namun
 | Hugging Face | `hf` | **Terhubung (dasar)** | Cari repo GGUF, daftar file, unduh dan verifikasi SHA-256; progres UI belum ada |
 | Server lokal (`/v1/*`) | `server` | **Terhubung (dasar)** | Set port/key, start/stop, status alamat; wajib uji perangkat |
 | RAG (pengetahuan tambahan) | `rag` | **Terhubung (dasar)** | Impor dokumen, indeks SQLite, retrieval saat chat; embeddings bergantung pada engine |
-| Dataset (import, validasi, split) | `train` | Belum | Modul "Data" menampilkan "segera hadir" |
-| Latih LoRA (REMOTE) | `train` + `python/` | **Belum** | Dataset, job/progres, pembatalan, dan unduh adapter belum dihubungkan ke Flutter |
+| Dataset (import, validasi, split) | `train` | **Sebagian** | Layar Latih dapat mengimpor dan memvalidasi JSONL/JSON/CSV; split train/val belum tersedia di Flutter |
+| Latih LoRA (REMOTE) | `train` + `python/` | **Sebagian, baru terhubung** | Konfigurasi, job/progres, stop/sambung, ZIP dan LoRA GGUF tersedia; perlu build dan uji perangkat/server |
 | Latih ON_DEVICE | `train` | Belum | Binary finetune llama.cpp belum ada di repo |
 | Hardware (`hardware/engine.json`) | `model`, `engine` | **Nilai tetap** | Tombol simpan belum menyimpan |
 | Fitur (`features/features.json`) | `model` | **Switch saja** | Vision, TTS, STT belum ada |
@@ -249,7 +249,7 @@ NEURON_API_KEY=ganti-dengan-kunci-panjang LLAMA_CPP_DIR=/path/ke/llama.cpp \
 - Path sumber model dibatasi ke folder models (`hf_repo` / `resolve`).
 - Untuk produksi, ikat Uvicorn ke localhost di belakang reverse proxy TLS. Terapkan batas body, firewall/VPN, rate limiting, kuota/retensi disk, dan monitoring.
 - Smoke test: pasang `python/requirements-test.txt` lalu jalankan `python python/tests/smoke_server.py` dari root; tanpa dependency FastAPI, skrip memakai mode STUB yang tidak menguji HTTP nyata.
-- Backend Python dapat diuji pada LAN via `http://IP_PC:8001`; koneksi HTTP dari APK hanya didukung build debug. Untuk APK release, tempatkan backend di balik reverse proxy TLS dan gunakan URL `https://`. Workflow Flutter Training masih placeholder.
+- Backend Python dapat diuji pada LAN via `http://IP_PC:8001`; koneksi HTTP dari APK hanya didukung build debug. Untuk APK release, tempatkan backend di balik reverse proxy TLS dan gunakan URL `https://`. Workflow Flutter Training remote baru dihubungkan dan belum diverifikasi lewat build/perangkat.
 
 Detail: [python/README.md](python/README.md), [docs/TRAINING.md](docs/TRAINING.md), [docs/DATASET.md](docs/DATASET.md), [docs/CONVERT.md](docs/CONVERT.md).
 
@@ -298,7 +298,7 @@ python3 scripts/make_brand_assets.py --src /path/ke/logo-sumber.png
 ---
 
 ## Keamanan
-- **Rahasia.** API key engine, key server lokal, dan token Hugging Face disimpan melalui `SecretStore` terenkripsi Android Keystore. `remoteTrainerApiKey` pada `training/train.json` dapat tetap plaintext bila diisi manual; jangan menempelkan secret ke berkas project, issue, log, atau repo.
+- **Rahasia.** API key engine, key server lokal, token Hugging Face, dan API key trainer disimpan melalui `SecretStore` terenkripsi Android Keystore. Bridge mengosongkan `remoteTrainerApiKey` saat menyimpan project dan memigrasikan nilai lama; jangan menempelkan secret ke issue, log, atau repo.
 - **Keystore rilis** tidak disimpan di repo. Gunakan `flutter_app/android/key.properties` (sudah di `.gitignore`); workflow publikasi mensyaratkan signing secrets/keystore valid dan memeriksa signature APK.
 - **Cleartext outbound.** Android release menetapkan `usesCleartextTraffic=false`; URL API dari APK release harus HTTPS. HTTP hanya diizinkan pada build debug untuk pengujian lokal.
 - **Server lokal inbound** tetap HTTP tanpa TLS. UI menampilkan konfirmasi sebelum mulai, menyediakan key acak 256-bit dengan minimum 32 karakter, dan listener bind ke satu IPv4 aktif. Bearer key/prompt bisa disadap di jaringan; gunakan jaringan tepercaya dan jangan expose/forward port ke internet.
@@ -312,7 +312,7 @@ python3 scripts/make_brand_assets.py --src /path/ke/logo-sumber.png
 
 **Belum siap dinyatakan production-ready.** Berikut daftar batasan yang diketahui:
 1. **Build APK dan uji Android belum diverifikasi** dalam lingkungan audit ini. Periksa job CI, tes Kotlin/Gradle, signing release, lalu uji perangkat nyata sebelum publikasi.
-2. **UI Flutter sebagian sudah terhubung**, termasuk chat/API, Hugging Face, RAG, Copilot dasar, dan Server lokal. Training end-to-end masih placeholder; rincian ada di [docs/MIGRASI_FLUTTER.md](docs/MIGRASI_FLUTTER.md).
+2. **UI Flutter sebagian sudah terhubung**, termasuk chat/API, Hugging Face, RAG, Copilot dasar, Server lokal, dan alur training remote tahap awal. Training on-device dan beberapa kontrol lanjut masih belum tersedia; rincian ada di [docs/MIGRASI_FLUTTER.md](docs/MIGRASI_FLUTTER.md).
 3. **Inferensi lokal mensyaratkan native library** llama.cpp yang dibangun untuk ABI perangkat. Pemilihan GGUF saja belum menjamin `.so` tersedia atau model bisa dimuat.
 4. **Template chat Jinja bebas** (`model/chat_template.jinja`) belum didukung. Model dengan template khusus jatuh ke ChatML tanpa pesan jelas.
 5. **Vision lokal** (mmproj / libmtmd) belum ada. Mode LOCAL menolak gambar.
@@ -334,9 +334,9 @@ Urutan pengerjaan historis ada di [docs/ROADMAP.md](docs/ROADMAP.md). Status fit
 |---|---|---|
 | 0–1 | Pondasi, project, API/local engine | Flutter sudah terhubung sebagian; native runtime dan build perangkat perlu verifikasi |
 | 2–5 | Hugging Face, server lokal, Copilot dasar, RAG | Layar Flutter tersedia; pengujian perangkat dan beberapa fitur lanjutan masih perlu |
-| 6 | Dataset dan training (REMOTE, ON_DEVICE) | Backend ada; UI Flutter end-to-end belum tersedia; finetune native belum diverifikasi |
+| 6 | Dataset dan training (REMOTE, ON_DEVICE) | Alur Flutter remote tahap awal tersedia; split/validasi serta uji perangkat/server masih perlu; finetune native belum tersedia |
 | 7 | Tools, guardrails, vision, suara, konversi, rilis | Tools/guardrails dasar aktif; vision/voice UI dan beberapa konversi belum tersedia |
-**Prioritas berikutnya:** jalankan CI/Android build, lengkapi uji perangkat dan konfigurasi release, lalu selesaikan alur Training dan batasan jaringan/operasional. Rincian ada di [docs/RELEASE.md](docs/RELEASE.md).
+**Prioritas berikutnya:** jalankan CI/Android build, lengkapi uji perangkat dan konfigurasi release, lalu lengkapi split train/val dan uji Training dengan server Python aktual serta batasan jaringan/operasional. Rincian ada di [docs/RELEASE.md](docs/RELEASE.md).
 
 ---
 

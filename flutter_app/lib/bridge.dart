@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/services.dart';
 
 /// Jembatan ke engine Kotlin:
@@ -184,6 +185,24 @@ class Bridge {
   static Future<void> copilotApply(String path, String oldText, String newText) async {
     await _project.invokeMethod<dynamic>('copilotApply', {'path': path, 'oldText': oldText, 'newText': newText});
   }
+
+  static Future<Map<String, dynamic>> trainingLoadConfig() async =>
+      Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>('trainingLoadConfig') ?? const {});
+  static Future<Map<String, dynamic>> trainingSaveConfig(Map<String, dynamic> config) async =>
+      Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>('trainingSaveConfig', {'config': jsonEncode(config)}) ?? const {});
+  static Future<Map<String, dynamic>> trainingInspectDataset(String path, String method) async =>
+      Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>('trainingInspectDataset', {'path': path, 'method': method}) ?? const {});
+  static Future<Map<String, dynamic>> trainingStart() async =>
+      Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>('trainingStart') ?? const {});
+  static Future<Map<String, dynamic>> trainingReconnect(String id) async =>
+      Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>('trainingReconnect', {'id': id}) ?? const {});
+  static Future<Map<String, dynamic>> trainingState() async =>
+      Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>('trainingState') ?? const {});
+  static Future<void> trainingCancel(String id) async {
+    await _project.invokeMethod<dynamic>('trainingCancel', {'id': id});
+  }
+  static Future<Map<String, dynamic>> trainingDownloadAdapter(String id, {required bool gguf}) async =>
+      Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>('trainingDownloadAdapter', {'id': id, 'gguf': gguf}) ?? const {});
 
   static Future<Map<String, String>> loadDrafts() async {
     final m = await _project.invokeMapMethod<String, dynamic>('loadDrafts');

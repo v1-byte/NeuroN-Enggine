@@ -47,11 +47,16 @@ class RemoteTrainer(baseUrl: String, private val apiKey: String = "") : Trainer 
         }
     }
 
-    override fun train(cfg: TrainingConfig, project: AiProject): Flow<TrainProgress> = flow {
+    /** Uploads data and creates the remote job, returning its ID before progress observation. */
+    suspend fun startJob(cfg: TrainingConfig): String = withContext(Dispatchers.IO) {
+        require(base.startsWith("http://") || base.startsWith("https://")) { "URL trainer harus memakai http:// atau https://" }
+        require(cfg.method != TrainMethod.RLHF) { "Metode RLHF belum didukung server trainer" }
         val trainFile = File(cfg.datasetPath)
+        require(trainFile.isFile) { "Berkas dataset train tidak ditemukan" }
         val name = uploadDataset(trainFile, remoteName = "${trainFile.parentFile?.name ?: "ds"}_${trainFile.name}")
         val valName = cfg.valDatasetPath.takeIf { it.isNotBlank() }?.let { vp ->
             val vf = File(vp)
+            require(vf.isFile) { "Berkas dataset validasi tidak ditemukan" }
             uploadDataset(vf, remoteName = "${vf.parentFile?.name ?: "ds"}_${vf.name}")
         }
         val json = JSONObject().put("method", cfg.method.name).put("base_model", cfg.baseModel)
@@ -62,7 +67,12 @@ class RemoteTrainer(baseUrl: String, private val apiKey: String = "") : Trainer 
             if (!r.isSuccessful) throw IOException("Mulai training gagal: HTTP ${r.code} ${r.body?.string()?.take(200)}")
             JSONObject(r.body!!.string()).getString("job_id")
         }
-        emitAll(watch(id))
+        jobId = id
+        id
+    }
+
+    override fun train(cfg: TrainingConfig, project: AiProject): Flow<TrainProgress> = flow {
+        emitAll(watch(startJob(cfg)))
     }.flowOn(Dispatchers.IO)
 
     /**
@@ -100,7 +110,12 @@ class RemoteTrainer(baseUrl: String, private val apiKey: String = "") : Trainer 
     fun useJob(id: String) { jobId = id }
 
     override suspend fun cancel() = withContext(Dispatchers.IO) {
-        jobId?.let { http.newCall(req("/train/$it/cancel").post("".toRequestBody()).build()).execute().close() }; Unit
+        jobId?.let { id ->
+            http.newCall(req("/train/$id/cancel").post("".toRequestBody()).build()).execute().use { response ->
+                if (!response.isSuccessful) throw IOException("Pembatalan gagal: HTTP ${response.code} ${response.body?.string()?.take(200)}")
+            }
+        }
+        Unit
     }
 
     /** Unduh adapter (zip) atau LoRA .gguf (gguf = true; server perlu LLAMA_CPP_DIR). */

@@ -6,7 +6,7 @@
 ## 0. Status jujur
 - Trainer ON_DEVICE memanggil **binary finetune llama.cpp** sebagai proses terpisah. Binary itu **belum ada di repo**. Sumber llama.cpp ditambahkan lewat `scripts/setup_native.sh` saat build, dan saya tidak bisa memeriksanya dari sini.
 - Nama flag CLI (`--model-base`, `--train-data`, `--lora-out`, dll.) dan format baris log **belum diverifikasi**. Keduanya harus dicocokkan dengan build yang Anda pakai.
-- Bagian yang sudah berjalan tanpa binary: preflight, konversi dataset, pembentukan argumen, dan layar.
+- Bagian yang sudah berjalan tanpa binary: preflight, konversi dataset, dan pembentukan argumen. Tidak ada alur layar Flutter untuk ON_DEVICE saat ini.
 - Memuat adapter ke engine sudah ada sebelumnya: `loraPath` masuk ke `EngineFactory.key`, sehingga engine dimuat ulang saat adapter berubah.
 
 ## 1. Menyiapkan binary (belum diuji)
@@ -32,8 +32,8 @@
 
 Argumen dipisah spasi. Path tidak boleh mengandung spasi.
 
-## 3. Preflight (di layar Latih)
-Latih dikunci bila ada error berikut:
+## 3. Preflight (logika modul; belum terekspos di layar Flutter)
+Trainer akan menolak bila ada error berikut:
 - target bukan ON_DEVICE, atau metode bukan **LORA**. QLoRA, DPO, dan full finetune tidak didukung di perangkat.
 - binary tidak ditemukan atau tidak bisa dijalankan.
 - model dasar tidak ditemukan, atau `quantization` bukan **F16 atau F32**. Asumsi ini konservatif: pelatihan LoRA pada bobot ter-kuantisasi belum diverifikasi di sini.

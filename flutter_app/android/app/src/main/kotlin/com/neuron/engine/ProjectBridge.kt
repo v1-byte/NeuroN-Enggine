@@ -42,15 +42,29 @@ import java.security.SecureRandom
 internal object ProjectStore {
     const val NAME = "default"
     const val API_KEY = "apiKey"
+    const val TRAINER_API_KEY = "remoteTrainerApiKey"
     private const val SECRETS = "neuron_secrets"
 
     fun repo(ctx: Context) = ProjectRepository(File(ctx.applicationContext.filesDir, "projects"))
     fun secrets(ctx: Context) = SecretStore(ctx.applicationContext, SECRETS)
-    fun load(ctx: Context): AiProject = repo(ctx).loadOrCreate(NAME)
+    fun load(ctx: Context): AiProject {
+        val project = repo(ctx).loadOrCreate(NAME)
+        if (project.training.remoteTrainerApiKey.isNotBlank()) {
+            val secretStore = secrets(ctx)
+            if (secretStore.get(TRAINER_API_KEY).isNullOrBlank()) {
+                secretStore.put(TRAINER_API_KEY, project.training.remoteTrainerApiKey)
+            }
+            val safe = project.copy(training = project.training.copy(remoteTrainerApiKey = ""))
+            repo(ctx).save(safe)
+            return safe
+        }
+        return project
+    }
 
     fun save(ctx: Context, p: AiProject) {
         if (p.engine.apiKey.isNotBlank()) secrets(ctx).put(API_KEY, p.engine.apiKey)
-        repo(ctx).save(p.copy(engine = p.engine.copy(apiKey = "")))
+        if (p.training.remoteTrainerApiKey.isNotBlank()) secrets(ctx).put(TRAINER_API_KEY, p.training.remoteTrainerApiKey)
+        repo(ctx).save(p.copy(engine = p.engine.copy(apiKey = ""), training = p.training.copy(remoteTrainerApiKey = "")))
     }
 }
 
@@ -99,6 +113,14 @@ internal object ProjectBridge {
                 "hfStartDownload" -> reply(scope, result) { hfStartDownload(app, str(a, "repo"), str(a, "file")) }
                 "hfDownloadState" -> reply(scope, result) { hfDownloadState(app, str(a, "id")) }
                 "hfCancelDownload" -> reply(scope, result) { hfCancelDownload(app, str(a, "id")) }
+                "trainingLoadConfig" -> reply(scope, result) { TrainingBridge.loadConfig(app) }
+                "trainingSaveConfig" -> reply(scope, result) { TrainingBridge.saveConfig(app, str(a, "config")) }
+                "trainingInspectDataset" -> reply(scope, result) { TrainingBridge.inspectDataset(app, str(a, "path"), str(a, "method")) }
+                "trainingStart" -> reply(scope, result) { TrainingBridge.start(app) }
+                "trainingReconnect" -> reply(scope, result) { TrainingBridge.reconnect(app, str(a, "id")) }
+                "trainingState" -> reply(scope, result) { TrainingBridge.state(app) }
+                "trainingCancel" -> reply(scope, result) { TrainingBridge.cancel(app, str(a, "id")) }
+                "trainingDownloadAdapter" -> reply(scope, result) { TrainingBridge.downloadAdapter(app, str(a, "id"), a["gguf"] == true) }
                 "copilotSuggest" -> reply(scope, result) { copilotSuggest(app, str(a, "complaint"), str(a, "sample"), str(a, "focus").ifBlank { null }) }
                 "copilotApply" -> reply(scope, result) { copilotApply(app, str(a, "path"), str(a, "oldText"), str(a, "newText")) }
                 "loadFeatures" -> reply(scope, result) { featureState(app) }

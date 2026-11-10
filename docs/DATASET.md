@@ -1,15 +1,13 @@
 # Dataset: import, validasi, pratinjau, dan split train/val (langkah 18)
 
-> **Status UI Flutter (2026-11-10):** layar **Training** masih placeholder. Instruksi tombol di bawah berasal dari rancangan UI/flow legacy dan belum dapat dijalankan dari build Flutter saat ini; backend dataset/training tidak berarti workflow pengguna sudah tersedia. Lihat [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md).
+> **Status UI Flutter (2026-11-10):** layar **Latih** mendukung pemilihan JSONL/JSON/CSV, pemeriksaan semua record, pratinjau, dan penggunaan dataset bersih langsung sebagai data train. Split train/val belum dihubungkan ke Flutter. Alur lama di bawah yang menyebut menu Data/aksi split menggambarkan rancangan legacy, bukan tombol aktif. Lihat [TRAINING.md](TRAINING.md) dan [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md).
 
 
 ## 1. Alur
-1. Buka **📚 Data** di baris bawah Workbench.
-2. Pilih file. File disalin ke penyimpanan app (`filesDir/datasets/`), karena trainer membaca dari path lokal.
-3. Periksa hasil: jumlah record, jumlah valid, daftar error (30 pertama, tetapi jumlah totalnya selalu lengkap), dan pratinjau 3 record valid.
-4. Jika tidak ada error, isi **rasio val** (default 0.1) dan **seed** (default 42), lalu tekan **Buat split & pakai di training**.
-5. Hasilnya tersimpan di `training/train.json` (`datasetPath`, `valDatasetPath`, `valRatio`, `splitSeed`).
-   Lalu buka tab `training/train.json` dan tekan **Jalankan**. Trainer mengunggah train dan val sebagai `<nama-dataset>_train.jsonl` dan `<nama-dataset>_val.jsonl`.
+1. Buka **Lainnya → Training** (atau Import Center → Dataset training).
+2. Pilih berkas `.jsonl`, `.json`, atau `.csv`. File disalin ke penyimpanan privat aplikasi (`filesDir/datasets/`).
+3. Periksa jumlah record valid/error dan pratinjau. UI menolak memulai training bila dataset memiliki error; perbaiki sumber lalu pilih ulang.
+4. Dataset bersih dipakai langsung sebagai data train dan diunggah ke server saat menekan **Mulai training**. UI saat ini belum membuat validation split.
 
 ## 2. Format yang diterima
 | Format | Syarat |

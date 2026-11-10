@@ -8,7 +8,7 @@ Tanggal: 2026-11-09. Dokumen ini berawal dari catatan migrasi dan beberapa bagia
 - File proyek tetap memakai `ProjectRepository`/`VirtualTree`; pengaturan API dan API key melalui bridge yang ada, dengan key disimpan di `SecretStore`.
 - Riwayat chat (tampilan dan konteks percakapan API) sekarang disimpan di SharedPreferences privat Android dan tombol hapus menghapus data tersimpan. Draft editor dipulihkan saat startup, di-flush ketika aplikasi masuk background, dan dibersihkan ketika proyek disimpan. Draft `engine/api.json` sengaja dikecualikan agar API key tidak tersimpan sebagai teks biasa.
 - Modul `:model`, `:engine`, `:project`, `:rag`, `:server`, `:hf`, `:train`, dan `:copilot` telah dimasukkan ke Gradle Flutter. Flutter kini memanggil chat API/LOCAL, kontrol service server, impor dan indexing RAG, serta pencarian/unduh GGUF HF melalui platform bridge.
-- Alur training end-to-end belum dibuat ulang di Flutter; layar Training masih menjelaskan bahwa fitur belum terhubung. Copilot dasar sudah aktif untuk meminta saran dan menerapkan patch yang lolos validasi setelah ditinjau. Native llama.cpp tetap memerlukan `.so` yang dibangun untuk ABI perangkat.
+- Training remote tahap awal sudah terhubung: pilih/validasi dataset, simpan konfigurasi, mulai/stop/sambung job, lihat progres/log, unduh ZIP, atau unduh LoRA GGUF untuk dipakai. Belum mencakup split train/val, grafik loss, riwayat lintas server, atau ON_DEVICE; belum dikompilasi/diuji. Copilot dasar sudah aktif untuk meminta saran dan menerapkan patch setelah ditinjau. Native llama.cpp tetap memerlukan `.so` yang dibangun untuk ABI perangkat.
 - APK dan tes Kotlin/Gradle belum diverifikasi di lingkungan perubahan ini karena Flutter/Android SDK tidak tersedia. Workflow publikasi release mewajibkan signing secrets valid dan memverifikasi signature APK sebelum upload.
 - Build release menolak koneksi cleartext keluar; varian debug mengizinkan HTTP untuk pengujian. Server lokal masuk tetap HTTP, butuh konfirmasi pengguna, key acak minimal 32 karakter, dan hanya disarankan pada jaringan tepercaya.
 
@@ -62,7 +62,7 @@ Dokumen lama (`STATUS.md`, `ARCHITECTURE.md`, dan lain-lain) menjelaskan fitur d
 | 🤗 Model (Hugging Face) | **Terhubung (dasar)** | Cari model GGUF, daftar file, unduh dengan progress/cancel dan verifikasi bila checksum tersedia |
 | 🖧 Server lokal | **Terhubung (dasar)** | Simpan port/key terenkripsi, buat key acak, konfirmasi risiko HTTP, mulai/hentikan service; tanpa TLS dan belum diuji di perangkat |
 | 📚 Data / RAG | **Terhubung (dasar)** | Impor berkas, indeks SQLite dan retrieval konteks chat; progres/hapus berkas belum ada |
-| 🏋 Latih (fine-tune) | **Belum dihubungkan** | Layar placeholder; dataset, konfigurasi job, progres, stop, dan unduh adapter belum diorkestrasi dari Flutter |
+| 🏋 Latih (fine-tune) | **Terhubung dasar (remote)** | Dataset JSONL/JSON/CSV dapat dipilih dan divalidasi; konfigurasi remote, mulai/progres/log/stop/sambung, unduh ZIP dan LoRA GGUF tersedia. Belum ada split train/val atau grafik; ON_DEVICE belum tersedia; build/perangkat belum diverifikasi |
 | Hardware (`hardware/engine.json`) | **Nilai tetap** | GPU layers 32, threads 8, dst. Tombol simpan hanya menampilkan pesan |
 | Fitur (`features/features.json`) | **Switch saja** | Tools, Vision, TTS, STT, Guardrails. Tidak tersimpan |
 | Pengaturan | **Statis** | Dialog teks + switch auto-indent |
@@ -122,8 +122,8 @@ Risiko yang harus diperhatikan saat build pertama:
 
 - **Typo di logo.** Tulisan di logo sumber berbunyi "NeuroN **Enggine**" (seharusnya "Engine"). Artwork tidak diubah. Di app hanya mark "NE" yang dipakai, jadi typo tidak tampil di UI. Perbaiki di sumber logo sebelum memakai `branding/neuron_logo.png` untuk publikasi.
 - **Preview UI.** `flutter_app/design/flutter_preview_v0.2.jpg` mendokumentasikan arah desain Beranda v0.2 sebagai mockup ilustratif; itu bukan screenshot hasil render Flutter atau uji perangkat.
-- **Rahasia.** API key engine melalui Settings, token HF, dan key server lokal disimpan di `SecretStore`. Field `remoteTrainerApiKey` pada konfigurasi training tetap perlu diperlakukan sebagai plaintext bila diisi manual ke file project; jangan commit file itu. Lihat juga [STATUS.md](STATUS.md).
-- **Dokumen fitur.** Panduan Server, Copilot, dan RAG kini mencatat alur Flutter yang tersedia serta kekurangannya. Panduan Training/Dataset tetap memberi peringatan bahwa UI training Flutter masih placeholder; Vision/Voice dan ON_DEVICE belum memiliki alur UI penuh.
+- **Rahasia.** API key engine, token HF, key server lokal, dan API key trainer disimpan di `SecretStore`. Project bridge mengosongkan `remoteTrainerApiKey` ketika menyimpan file konfigurasi dan memigrasikan nilai lama yang mungkin tersimpan sebagai plaintext. Periksa keystore Android; jangan salin secret ke issue/log/repo.
+- **Dokumen fitur.** Panduan Server, Copilot, RAG, dan Training mencatat alur Flutter yang tersedia serta kekurangannya. Training remote baru terhubung dasar; split train/val dan ON_DEVICE, serta Vision/Voice, belum memiliki alur UI penuh.
 - **Lisensi belum ditentukan.** Tidak ada berkas `LICENSE`.
 
 ## 8. Langkah berikutnya (urut)

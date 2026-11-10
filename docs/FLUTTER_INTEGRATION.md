@@ -9,7 +9,7 @@ Flutter memanggil fitur Android melalui `MethodChannel('neuron/project')` dan `E
 - **RAG:** halaman Data & RAG mengimpor file pilihan ke folder knowledge privat, menambahkannya ke `KnowledgeConfig`, membangun indeks SQLite lewat engine terpilih, dan menambahkan konteks hasil retrieval ke pesan pengguna terakhir pada chat.
 - **Hugging Face:** halaman Hugging Face mencari repo bertag GGUF, menampilkan berkas GGUF, mengunduh file yang dipilih melalui `HfClient`, memeriksa checksum bila Hub menyediakan checksum, dan mengatur file hasil sebagai model lokal terpilih. Token HF disimpan melalui `HfPrefs`.
 - **Copilot:** layar Flutter meminta saran, menampilkan nilai sebelum dan usulan per file, lalu mewajibkan checkbox review sebelum apply. Eval sebelum/sesudah dan undo/reject lanjutan belum tersedia.
-- **Pelatihan:** halaman Training masih placeholder; modul backend Kotlin/Python tidak serta-merta menyediakan workflow pengguna.
+- **Pelatihan:** layar Training kini mengimpor dan memvalidasi dataset JSONL/JSON/CSV, menyimpan URL/model/parameter remote, memulai job dan polling progres/log, membatalkan/menyambung job, serta mengunduh ZIP atau LoRA GGUF. API key trainer disimpan melalui `SecretStore`; file konfigurasi proyek hanya menyimpan field key kosong. Split train/val, grafik loss dan training on-device belum tersedia. Build/perangkat/server belum diuji.
 
 ## Batasan yang masih ada
 

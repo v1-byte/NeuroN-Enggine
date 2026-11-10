@@ -8,7 +8,7 @@
 - [x] Import Center mengarahkan pengguna ke pemilih model GGUF, dokumen Knowledge/RAG, atau Hugging Face yang sudah terhubung. Library menampilkan model terpilih dan dokumen knowledge yang terdaftar.
 - [x] Aksen utama diubah ke biru; ungu dipertahankan untuk fitur AI.
 - [x] Layar Flutter aktif: chat API/LOCAL, model lokal bersyarat native library, Hugging Face search/download dengan progress, impor dan indexing RAG, Copilot suggestion/patch review, serta kontrol server lokal.
-- [~] Import multi-select/review, URL/cloud storage/transfer LAN, dan workflow training end-to-end belum tersedia. Layar Training masih placeholder; editor/hardware memiliki keterbatasan yang dirinci di `MIGRASI_FLUTTER.md`.
+- [~] Import multi-select/review, URL/cloud storage/transfer LAN, split train/val, grafik loss, serta ON_DEVICE belum tersedia. Training remote tahap awal sudah memiliki impor/validasi dataset, konfigurasi, job/progres, stop/sambung, dan unduhan adapter; belum dikompilasi atau diuji pada perangkat/server.
 - [~] Build APK dan test Android belum diverifikasi di lingkungan audit ini karena Flutter/Android SDK tidak tersedia. Jangan menganggap rilis siap sebelum job GitHub Actions dan uji perangkat lulus.
 - [~] Build lokal tanpa `key.properties` dapat memakai debug signing untuk pengujian. Workflow publikasi release kini berhenti jika signing secrets/keystore tidak valid dan memverifikasi APK signature; tetap perlu memeriksa hasil workflow pada tag rilis.
 - [x] Build release Android memblokir cleartext outbound; hanya build debug mengizinkan koneksi HTTP. Server lokal masuk tetap HTTP tanpa TLS, di-bind ke satu IPv4 aktif dan meminta konfirmasi UI serta key acak minimum 32 karakter; gunakan hanya di jaringan tepercaya.
