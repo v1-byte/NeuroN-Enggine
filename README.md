@@ -6,7 +6,7 @@
 
 **NeuroN Engine** adalah engine AI lokal untuk Android. Aplikasi ini menjalankan model GGUF di perangkat (llama.cpp), atau memakai API OpenAI-compatible, lalu menyediakan konfigurasi model, RAG, server lokal OpenAI-compatible, copilot untuk memperbaiki konfigurasi, dan pelatihan LoRA lewat server Python.
 
-> **Status: alpha (v0.2.5).** UI Flutter memakai shell mobile-first Beranda/Chat/Library/Import/Lainnya; editor lama hanya tersedia sebagai Workspace tanpa rail IDE permanen. APK release telah memuat `libneuron_llama.so` arm64 dan diuji build, analyzer, unit test, serta signature APK v2. Tanpa keystore privat, APK memakai debug signing dan hanya layak untuk uji instalasi, bukan distribusi produksi. Minifikasi ditunda sampai aturan R8 dependency divalidasi. Beberapa alur import/training belum tersedia. Lihat [Status fitur](#status-fitur), [ringkasan perubahan UI](docs/UI_REFRESH.md), dan [docs/RELEASE.md](docs/RELEASE.md).
+> **Status: alpha (v0.2.5).** UI Flutter memakai shell mobile-first Beranda/Chat/Library/Import/Lainnya, preset tema, animasi navigasi, dan Tutorial NeuroN. Import Center dapat mengambil GGUF dari Download/internal storage atau Hugging Face; model tersimpan dapat dipilih ulang dan dipakai sebagai model training. Auto-update mengecek GitHub Releases dan membuka installer Android setelah konfirmasi. APK produksi tetap wajib ditandatangani dengan keystore privat. Lihat [Status fitur](#status-fitur), [ringkasan perubahan UI](docs/UI_REFRESH.md), dan [docs/RELEASE.md](docs/RELEASE.md).
 
 ---
 
@@ -37,14 +37,14 @@
 
 | Area | Yang disediakan | Lokasi |
 |---|---|---|
-| **UI Android** | Beranda, Chat, Library, Import Center, Activity, Workspace editor; halaman model/server/RAG/HF | `flutter_app/` (Flutter) |
+| **UI Android** | Beranda, Chat, Library, Import Center, Activity, Workspace editor, tema, tutorial, animasi | `flutter_app/` (Flutter) |
 | **Konfigurasi** | 7 bagian config dalam satu file project: parameter chat, file model, tokenizer, pengetahuan tambahan, pelatihan ulang, hardware, fitur | `model/`, `project/` |
 | **Engine** | Antarmuka `InferenceEngine` dengan dua implementasi: llama.cpp lokal (JNI) dan API OpenAI-compatible | `engine/` |
 | **Hugging Face** | Cari dan unduh model: resume, WorkManager, verifikasi SHA-256, token untuk model gated | `hf/` |
 | **RAG** | Pemrosesan dokumen (txt, md, docx, pdf), chunking, vector store SQLite, sumber di jawaban | `rag/` |
 | **Server lokal** | Endpoint OpenAI-compatible di HP (`/v1/chat/completions`, `/v1/models`, `/v1/embeddings`, `/health`), API key, SSE | `server/` |
 | **Copilot** | Saran patch config (diff, terima/tolak), eval sebelum/sesudah, cek konsistensi tokenizer | `copilot/` |
-| **Pelatihan** | Dataset (jsonl/csv/json), split train/val, trainer REMOTE (server Python) dan ON_DEVICE (kerangka) | `train/`, `python/` |
+| **Pelatihan** | Dataset (jsonl/csv/json), LoRA/QLoRA remote, pemilihan model lokal/GGUF, upload model ke trainer | `train/`, `python/` |
 | **Server pelatih** | FastAPI: upload dataset, SFT/LoRA/QLoRA/DPO, konversi GGUF, quantize, merge, inspeksi | `python/` |
 
 Aturan utama: **semua pemanggilan AI lewat `InferenceEngine`.** UI, server, RAG, dan copilot tidak tahu engine mana yang dipakai.
@@ -144,11 +144,13 @@ Legenda: **Ada** = tersedia di UI; **Terhubung (dasar)** = memanggil modul namun
 | Engine llama.cpp lokal | `engine` (JNI, `neuron_llama.cpp`) | **Terhubung bersyarat** | Pemilihan GGUF aktif; perlu `libneuron_llama.so` untuk ABI perangkat |
 | Engine API OpenAI-compatible | `engine` (`RemoteApiEngine`) | **Terhubung** | Stream SSE dan stop; perlu uji endpoint aktual |
 | Tool calling, guardrails | `engine` (`ToolEngine`, `Guardrails`) | Hanya tampilan | Berbasis prompt, belum format `tool_calls` OpenAI |
-| Hugging Face | `hf` | **Terhubung (dasar)** | Cari repo GGUF, daftar file, unduh dan verifikasi SHA-256; progres UI belum ada |
+| Hugging Face | `hf` | **Terhubung** | Cari repo GGUF, tampilkan ukuran file, unduh dengan progress/resume/checksum, dan aktifkan model otomatis |
 | Server lokal (`/v1/*`) | `server` | **Terhubung (dasar)** | Set port/key, start/stop, status alamat; wajib uji perangkat |
 | RAG (pengetahuan tambahan) | `rag` | **Terhubung (dasar)** | Impor dokumen, indeks SQLite, retrieval saat chat; embeddings bergantung pada engine |
 | Dataset (import, validasi, split) | `train` | **Sebagian** | Layar Latih dapat mengimpor dan memvalidasi JSONL/JSON/CSV; split train/val belum tersedia di Flutter |
-| Latih LoRA (REMOTE) | `train` + `python/` | **Sebagian, baru terhubung** | Konfigurasi, job/progres, stop/sambung, ZIP dan LoRA GGUF tersedia; perlu build dan uji perangkat/server |
+| Latih LoRA (REMOTE) | `train` + `python/` | **Terhubung dasar** | LoRA/QLoRA, job/progres, stop/sambung, ZIP/LoRA GGUF, serta upload model GGUF lokal ke trainer |
+| Tema, ikon, tutorial, animasi | `flutter_app/lib/theme.dart`, `tutorial.dart` | **Ada** | Lima preset warna, tutorial interaktif, dan transisi navigasi |
+| Auto-update APK | `UpdateBridge.kt` | **Ada** | Cek GitHub Releases, tampilkan ukuran, unduh asset APK, lalu buka installer Android setelah konfirmasi |
 | Latih ON_DEVICE | `train` | Belum | Binary finetune llama.cpp belum ada di repo |
 | Hardware (`hardware/engine.json`) | `model`, `engine` | **Nilai tetap** | Tombol simpan belum menyimpan |
 | Fitur (`features/features.json`) | `model` | **Switch saja** | Vision, TTS, STT belum ada |
