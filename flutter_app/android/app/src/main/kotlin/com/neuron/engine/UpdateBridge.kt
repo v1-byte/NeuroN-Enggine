@@ -50,7 +50,7 @@ internal object UpdateBridge {
             readTimeout = 30_000
             requestMethod = "GET"
             setRequestProperty("Accept", "application/vnd.github+json")
-            setRequestProperty("User-Agent", "NeuroN-Engine/${BuildConfig.VERSION_NAME}")
+            setRequestProperty("User-Agent", "NeuroN-Engine")
         }
 
     private fun check(ctx: Context): Map<String, Any?> {
@@ -65,8 +65,9 @@ internal object UpdateBridge {
         }
         val selected = apk ?: return mapOf("available" to false, "reason" to "APK release belum tersedia")
         val tag = release.optString("tag_name")
-        if (!isNewer(tag, BuildConfig.VERSION_NAME)) {
-            return mapOf("available" to false, "reason" to "APK sudah versi terbaru", "current" to BuildConfig.VERSION_NAME)
+        val current = currentVersion(ctx)
+        if (!isNewer(tag, current)) {
+            return mapOf("available" to false, "reason" to "APK sudah versi terbaru", "current" to current)
         }
         return mapOf(
             "available" to true,
@@ -74,7 +75,7 @@ internal object UpdateBridge {
             "name" to selected.optString("name"),
             "url" to selected.optString("browser_download_url"),
             "size" to selected.optLong("size", 0L),
-            "current" to BuildConfig.VERSION_NAME,
+            "current" to current,
             "notes" to release.optString("body"),
         )
     }
@@ -90,6 +91,10 @@ internal object UpdateBridge {
         }
         return false
     }
+
+    @Suppress("DEPRECATION")
+    private fun currentVersion(ctx: Context): String =
+        ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "0.0.0"
 
     private fun downloadAndInstall(ctx: Context, rawUrl: String): Map<String, Any> {
         require(rawUrl.startsWith("https://github.com/")) { "Sumber update tidak dipercaya" }
