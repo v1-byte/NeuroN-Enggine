@@ -113,6 +113,16 @@ class Bridge {
     await _project.invokeMethod<dynamic>('clearChatHistory');
   }
 
+  static Future<void> exportChatHistory(String markdown) async {
+    await _project.invokeMethod<dynamic>('shareChatExport', {'content': markdown});
+  }
+
+  static Future<List<Map<String, dynamic>>> runEngineBenchmark() async =>
+      (await _project.invokeListMethod<dynamic>('runEngineBenchmark') ?? const [])
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+
   static Future<Map<String, dynamic>> setEngineMode(String mode) async =>
       Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>(
               'setEngineMode', {'mode': mode}) ??

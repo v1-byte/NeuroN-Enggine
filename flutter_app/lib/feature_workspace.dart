@@ -30,6 +30,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
   List<Map<String, dynamic>> _files = [];
   List<Map<String, dynamic>> _localModels = [];
   List<Map<String, dynamic>> _downloadHistory = [];
+  List<Map<String, dynamic>> _benchmarkResults = [];
   Map<String, dynamic> _server = {};
   Map<String, dynamic> _rag = {};
   String? _repoSelected;
@@ -38,6 +39,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
   String _sizeFilter = 'Semua';
   String _quantFilter = 'Semua';
   Timer? _downloadPoll;
+  Timer? _historyPoll;
   Map<String, dynamic> _downloadState = const {};
   Map<String, dynamic> _health = const {};
   List<Map<String, dynamic>> _copilotChanges = [];
@@ -50,12 +52,16 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
     if (widget.page == 'Data & RAG') _loadRag();
     if (widget.page == 'Model lokal') _loadLocalModels();
     if (widget.page == 'Hardware') _loadHealth();
-    if (widget.page == 'Hugging Face') _loadDownloadHistory();
+    if (widget.page == 'Hugging Face') {
+      _loadDownloadHistory();
+      _historyPoll = Timer.periodic(const Duration(seconds: 2), (_) => _loadDownloadHistory());
+    }
   }
 
   @override
   void dispose() {
     _downloadPoll?.cancel();
+    _historyPoll?.cancel();
     _query.dispose();
     _repo.dispose();
     _port.dispose();
@@ -116,11 +122,31 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
 
   Future<void> _loadHealth({int modelSize = 0}) async {
     try {
-      final health = await Bridge.deviceHealth(modelSize: modelSize);
-      if (mounted) setState(() => _health = health);
+      final values = await Future.wait<dynamic>([
+        Bridge.deviceHealth(modelSize: modelSize),
+        Bridge.localModels(),
+      ]);
+      if (mounted) {
+        setState(() {
+          _health = Map<String, dynamic>.from(values[0] as Map);
+          _localModels = List<Map<String, dynamic>>.from(values[1] as List);
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _status = 'Health check belum dapat diakses: $e');
     }
+  }
+
+  List<Map<String, dynamic>> _recommendedLocalModels() {
+    final maxBytes = (_health['recommendedMaxModel'] as num?)?.toInt() ?? 0;
+    if (maxBytes <= 0) return const [];
+    final fitting = _localModels.where((model) {
+      final size = (model['size'] as num?)?.toInt() ?? 0;
+      return size > 0 && size <= maxBytes;
+    }).toList()
+      ..sort((a, b) => ((b['size'] as num?)?.toInt() ?? 0)
+          .compareTo((a['size'] as num?)?.toInt() ?? 0));
+    return fitting.take(3).toList(growable: false);
   }
 
   Future<void> _loadDownloadHistory() async {
@@ -194,14 +220,14 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
   });
 
   Future<void> _download(String repo, String file) async {
-    if (_downloadId != null) return;
     await _run(() async {
       final started = await Bridge.hfStartDownload(repo, file);
       _downloadId = started['id']?.toString();
       if (_downloadId == null) throw Exception('ID unduhan tidak tersedia');
       _downloadState = <String, dynamic>{'state': 'enqueued', 'file': file, 'done': 0, 'total': -1};
       _downloadPaused = false;
-      setState(() => _status = 'Unduhan berjalan di background…');
+      setState(() => _status = 'Unduhan masuk antrean WorkManager…');
+      await _loadDownloadHistory();
       _downloadPoll?.cancel();
       _downloadPoll = Timer.periodic(const Duration(milliseconds: 500), (_) => _pollDownload());
     });
@@ -355,6 +381,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
       'Latih' => TrainingPage(onLog: widget.onLog),
       'Copilot' => _copilotPage(),
       'Hardware' => _hardwarePage(),
+      'Benchmark' => _benchmarkPage(),
       _ => _pendingPage(Icons.info_outline, widget.page, 'Fitur ini belum memiliki layar aktif.'),
       },
     ]);
@@ -416,6 +443,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
 
   Widget _hardwarePage() {
     final warnings = ((_health['warnings'] as List?) ?? const []).map((e) => e.toString()).toList();
+    final modelSuggestions = _recommendedLocalModels();
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       _card('Device Health Check', 'Periksa RAM, storage, ABI, dan kondisi perangkat sebelum memuat model besar.', icon: Icons.health_and_safety_outlined, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Wrap(spacing: 8, runSpacing: 8, children: [
@@ -427,6 +455,21 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
         const SizedBox(height: 10),
         Text('ABI: ${_health['abi'] ?? 'memuat…'}', style: const TextStyle(fontSize: 11, color: muted)),
         Text('Rekomendasi ukuran model: ${_bytes(_health['recommendedMaxModel'])}', style: const TextStyle(fontSize: 11, color: muted)),
+        const SizedBox(height: 10),
+        const Text('Model lokal yang sesuai perkiraan RAM', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+        const SizedBox(height: 4),
+        if (modelSuggestions.isEmpty)
+          const Text('Belum ada model lokal yang dapat direkomendasikan. Impor atau unduh GGUF, lalu periksa kembali.', style: TextStyle(fontSize: 11, color: muted))
+        else
+          for (final model in modelSuggestions) ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text('${model['name']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11)),
+            subtitle: Text('${_bytes(model['size'])}${model['active'] == true ? ' · aktif' : ''}', style: const TextStyle(fontSize: 10, color: muted)),
+            trailing: model['active'] == true
+                ? const Icon(Icons.check_circle, color: Colors.greenAccent, size: 18)
+                : TextButton(onPressed: _busy ? null : () => _activateLocalModel('${model['path']}'), child: const Text('Pakai')),
+          ),
         if (warnings.isNotEmpty) ...[
           const SizedBox(height: 8),
           for (final warning in warnings) Padding(padding: const EdgeInsets.only(bottom: 4), child: Text('⚠ $warning', style: const TextStyle(color: Colors.orangeAccent, fontSize: 11))),
@@ -435,8 +478,41 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
         OutlinedButton.icon(onPressed: _busy ? null : () => _loadHealth(), icon: const Icon(Icons.refresh), label: const Text('Periksa ulang')),
       ])),
       _message(),
-    ];
+    ]);
   }
+
+  Future<void> _runEngineBenchmark() async => _run(() async {
+        final results = await Bridge.runEngineBenchmark();
+        if (!mounted) return;
+        setState(() => _benchmarkResults = results);
+        widget.onLog('INFO', 'Benchmark engine selesai (${results.length} prompt)');
+        setState(() => _status = 'Benchmark selesai: ${results.length} prompt.');
+      });
+
+  Widget _benchmarkPage() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        _card(
+          'Benchmark engine',
+          'Jalankan tiga prompt tetap untuk mengukur waktu respons, token pertama, dan throughput jika engine melaporkan jumlah token. Sampling memakai temperature 0 dan seed tetap.',
+          icon: Icons.speed_outlined,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Jika memakai engine API, tombol ini mengirim tiga permintaan ke penyedia Anda dan dapat menimbulkan biaya. Jalankan hanya saat siap.', style: TextStyle(fontSize: 11, color: muted)),
+            const SizedBox(height: 10),
+            FilledButton.icon(onPressed: _busy ? null : _runEngineBenchmark, icon: const Icon(Icons.play_arrow), label: const Text('Jalankan benchmark')),
+            if (_benchmarkResults.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              for (final sample in _benchmarkResults) Card(
+                color: panel2,
+                child: ListTile(
+                  dense: true,
+                  title: Text('${sample['elapsedMs']} ms · token pertama ${sample['firstTokenMs'] ?? '—'} ms', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                  subtitle: Text('Karakter ${sample['outputCharacters']} · token/detik ${sample['tokensPerSecond'] ?? 'tidak dilaporkan'}\n${sample['outputPreview']}', maxLines: 4, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: muted)),
+                ),
+              ),
+            ],
+          ]),
+        ),
+        _message(),
+      ]);
 
   Widget _metric(String label, String value) => Container(
         padding: const EdgeInsets.all(10),
@@ -535,7 +611,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
           return Column(children: [
             LinearProgressIndicator(value: total > 0 ? (done / total).clamp(0, 1).toDouble() : null),
             const SizedBox(height: 5),
-            Row(children: [Expanded(child: Text('${_downloadState['file'] ?? 'Menyiapkan…'} · ${_bytes(done)} / ${_bytes(total)} · ${_rate(_downloadState['speed'])} · ETA ${_eta(_downloadState['eta'])}', style: const TextStyle(fontSize: 11, color: muted))), TextButton(onPressed: _pauseOrResumeDownload, child: Text(_downloadPaused ? 'Lanjutkan' : 'Jeda')), TextButton(onPressed: _cancelDownload, child: const Text('Batal'))]),
+            Row(children: [Expanded(child: Text('${_historyStateLabel('${_downloadState['state']}')} · ${_downloadState['file'] ?? 'Menyiapkan…'} · ${_bytes(done)} / ${_bytes(total)} · ${_rate(_downloadState['speed'])} · ETA ${_eta(_downloadState['eta'])}', style: const TextStyle(fontSize: 11, color: muted))), TextButton(onPressed: _pauseOrResumeDownload, child: Text(_downloadPaused ? 'Lanjutkan' : 'Jeda')), TextButton(onPressed: _cancelDownload, child: const Text('Batal'))]),
           ]);
         }),
       ],
@@ -543,9 +619,9 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
         const SizedBox(height: 12),
         const Align(alignment: Alignment.centerLeft, child: Text('Riwayat download', style: TextStyle(fontWeight: FontWeight.w700))),
         const SizedBox(height: 5),
-        for (final item in _downloadHistory.take(10)) ListTile(dense: true, contentPadding: EdgeInsets.zero, leading: Icon(_historyIcon('${item['state']}'), color: _historyColor('${item['state']}')), title: Text('${item['file']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11)), subtitle: Text('${item['repo']} · ${item['state']}${item['error'].toString().isEmpty ? '' : ' · ${item['error']}' }', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: muted))),
+        for (final item in _downloadHistory.take(10)) ListTile(dense: true, contentPadding: EdgeInsets.zero, leading: Icon(_historyIcon('${item['state']}'), color: _historyColor('${item['state']}')), title: Text('${item['file']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11)), subtitle: Text('${item['repo']} · ${_historyStateLabel('${item['state']}')}${item['error'].toString().isEmpty ? '' : ' · ${item['error']}' }', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: muted))),
       ],
-      const SizedBox(height: 5), const Text('Unduhan memakai WorkManager foreground job, resume dari byte terakhir, menampilkan progres per-byte, dan dapat dibatalkan.', style: TextStyle(fontSize: 11, color: muted)),
+      const SizedBox(height: 5), const Text('Semua unduhan diantrikan serial oleh WorkManager. Kegagalan jaringan dicoba ulang otomatis (maksimal tiga percobaan); unduhan dapat dijeda, dilanjutkan dari byte terakhir, atau dibatalkan.', style: TextStyle(fontSize: 11, color: muted)),
     ])), _message(),
   ]);
 
@@ -614,8 +690,9 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
   String _bytes(dynamic value) { final n = value is num ? value.toDouble() : 0.0; if (n <= 0) return 'ukuran tidak diketahui'; if (n >= 1e9) return '${(n / 1e9).toStringAsFixed(1)} GB'; return '${(n / 1e6).toStringAsFixed(0)} MB'; }
   String _rate(dynamic value) { final n = value is num ? value.toDouble() : 0.0; return n <= 0 ? '—' : '${_bytes(n)}/s'; }
   String _eta(dynamic value) { final n = value is num ? value.toInt() : -1; if (n < 0) return '—'; if (n < 60) return '${n}s'; return '${n ~/ 60}m'; }
-  IconData _historyIcon(String state) => switch (state) { 'succeeded' => Icons.check_circle_outline, 'failed' => Icons.error_outline, 'paused' => Icons.pause_circle_outline, _ => Icons.downloading_outlined };
-  Color _historyColor(String state) => switch (state) { 'succeeded' => Colors.greenAccent, 'failed' => Colors.redAccent, 'paused' => Colors.orangeAccent, _ => blue };
+  String _historyStateLabel(String state) => switch (state) { 'succeeded' => 'selesai', 'failed' => 'gagal', 'cancelled' => 'dibatalkan', 'paused' => 'dijeda', 'blocked' || 'queued' || 'enqueued' => 'menunggu antrean', 'running' => 'mengunduh', _ => state };
+  IconData _historyIcon(String state) => switch (state) { 'succeeded' => Icons.check_circle_outline, 'failed' => Icons.error_outline, 'paused' => Icons.pause_circle_outline, 'blocked' || 'queued' || 'enqueued' => Icons.schedule, _ => Icons.downloading_outlined };
+  Color _historyColor(String state) => switch (state) { 'succeeded' => Colors.greenAccent, 'failed' => Colors.redAccent, 'paused' || 'blocked' || 'queued' || 'enqueued' => Colors.orangeAccent, _ => blue };
 
   Widget _pendingPage(IconData icon, String title, String detail) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [_card(title, detail, icon: icon), _message()]);
 }

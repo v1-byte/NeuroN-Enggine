@@ -654,6 +654,8 @@ class MorePage extends StatelessWidget {
                 'LoRA/QLoRA dengan model dan dataset pilihan', () => onOpenTool('Latih')),
             _item(Icons.memory_outlined, 'Hardware',
                 'Pengaturan engine lanjutan', () => onOpenTool('Hardware')),
+            _item(Icons.speed_outlined, 'Benchmark engine',
+                'Ukur waktu respons dan throughput model', () => onOpenTool('Benchmark')),
           ]),
           const SizedBox(height: 12),
           _group('PREFERENSI', [

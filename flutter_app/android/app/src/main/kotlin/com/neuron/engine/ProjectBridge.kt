@@ -1,6 +1,7 @@
 package com.neuron.engine
 
 import android.content.Context
+import android.content.Intent
 import com.neuron.model.AiProject
 import com.neuron.model.EngineMode
 import com.neuron.model.SecretStore
@@ -140,6 +141,8 @@ internal object ProjectBridge {
                 "loadChatHistory" -> reply(scope, result) { loadChatHistory(app) }
                 "saveChatHistory" -> reply(scope, result) { saveChatHistory(app, a) }
                 "clearChatHistory" -> reply(scope, result) { clearChatHistory(app) }
+                "shareChatExport" -> shareChatExport(app, result, str(a, "content"))
+                "runEngineBenchmark" -> runEngineBenchmark(app, scope, result)
                 "loadDrafts" -> reply(scope, result) { loadDrafts(app) }
                 "saveDraft" -> reply(scope, result) { saveDraft(app, str(a, "path"), str(a, "text")) }
                 else -> result.notImplemented()
@@ -155,7 +158,48 @@ internal object ProjectBridge {
         }
     }
 
-    private fun writeFile(ctx: Context, path: String, text: String): Map<String, Any> {
+    private fun shareChatExport(ctx: Context, result: MethodChannel.Result, markdown: String) {
+        runCatching {
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "text/markdown"
+                putExtra(Intent.EXTRA_SUBJECT, "Riwayat Chat NeuroN")
+                putExtra(Intent.EXTRA_TEXT, markdown)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            ctx.startActivity(Intent.createChooser(send, "Ekspor riwayat chat").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.onSuccess {
+            result.success(mapOf("ok" to true))
+        }.onFailure {
+            result.error("EXPORT_FAILED", it.message ?: "Gagal membuka share sheet", null)
+        }
+    }
+
+    private fun runEngineBenchmark(ctx: Context, scope: CoroutineScope, result: MethodChannel.Result) {
+        scope.launch {
+            try {
+                val samples = withContext(Dispatchers.IO) {
+                    val project = ProjectStore.load(ctx)
+                    val engine = EngineHub.ensure(project)
+                    EngineBenchmarkRunner(engine).run(project)
+                }
+                result.success(samples.map { sample ->
+                    mapOf(
+                        "prompt" to sample.prompt,
+                        "elapsedMs" to sample.elapsedMillis,
+                        "firstTokenMs" to sample.timeToFirstTokenMillis,
+                        "outputCharacters" to sample.outputCharacters,
+                        "outputPreview" to sample.outputPreview,
+                        "completionTokens" to sample.completionTokens,
+                        "tokensPerSecond" to sample.tokensPerSecond,
+                    )
+                })
+            } catch (e: Exception) {
+                result.error("BENCHMARK_FAILED", e.message ?: "Benchmark gagal", null)
+            }
+        }
+    }
+
+  private fun writeFile(ctx: Context, path: String, text: String): Map<String, Any> {
         val updated = VirtualTree.write(ProjectStore.load(ctx), path, text).getOrThrow()
         ProjectStore.save(ctx, updated)
         runCatching { clearDraft(ctx, path) }
