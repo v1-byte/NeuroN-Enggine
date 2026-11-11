@@ -117,6 +117,8 @@ internal object ProjectBridge {
                 "hfDownload" -> reply(scope, result) { hfDownload(app, str(a, "repo"), str(a, "file")) }
                 "hfStartDownload" -> reply(scope, result) { hfStartDownload(app, str(a, "repo"), str(a, "file")) }
                 "hfDownloadState" -> reply(scope, result) { hfDownloadState(app, str(a, "id")) }
+                "hfPauseDownload" -> reply(scope, result) { hfPauseDownload(app, str(a, "id")) }
+                "hfResumeDownload" -> reply(scope, result) { hfResumeDownload(app, str(a, "id")) }
                 "hfCancelDownload" -> reply(scope, result) { hfCancelDownload(app, str(a, "id")) }
                 "trainingLoadConfig" -> reply(scope, result) { TrainingBridge.loadConfig(app) }
                 "trainingSaveConfig" -> reply(scope, result) { TrainingBridge.saveConfig(app, str(a, "config")) }
@@ -381,8 +383,21 @@ internal object ProjectBridge {
     }
 
     private fun hfCancelDownload(ctx: Context, rawId: String): Map<String, Any> {
-        WorkManager.getInstance(ctx).cancelWorkById(UUID.fromString(rawId))
+        val id = UUID.fromString(rawId)
+        WorkManager.getInstance(ctx).cancelWorkById(id)
+        HfDownloadWorker.forget(ctx, id)
         return mapOf("ok" to true)
+    }
+
+    private fun hfPauseDownload(ctx: Context, rawId: String): Map<String, Any> {
+        val id = UUID.fromString(rawId)
+        return mapOf("ok" to HfDownloadWorker.pause(ctx, id), "id" to rawId, "state" to "paused")
+    }
+
+    private fun hfResumeDownload(ctx: Context, rawId: String): Map<String, Any> {
+        val id = UUID.fromString(rawId)
+        val resumed = HfDownloadWorker.resume(ctx, id) ?: error("Request download tidak ditemukan; mulai ulang unduhan")
+        return mapOf("ok" to true, "id" to resumed.toString(), "state" to "enqueued")
     }
 
     private fun copilotSuggest(ctx: Context, complaint: String, sample: String, focus: String?): Map<String, Any?> = runBlocking(Dispatchers.IO) {

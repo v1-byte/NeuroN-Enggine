@@ -32,6 +32,7 @@ class HfDownloadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker
         private const val CHANNEL = "hf_download"
         private const val NOTIF_ID = 4101
         private const val MAX_ATTEMPTS = 3
+        private const val REQUESTS = "hf_download_requests"
 
         fun uniqueName(repoId: String) = "hf-download-$repoId"
 
@@ -46,7 +47,27 @@ class HfDownloadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .build()
             WorkManager.getInstance(ctx).enqueueUniqueWork(uniqueName(repoId), ExistingWorkPolicy.REPLACE, req)
+            ctx.getSharedPreferences(REQUESTS, Context.MODE_PRIVATE).edit()
+                .putString(req.id.toString(), "$repoId\n${files.joinToString("\u0000")}").apply()
             return req.id
+        }
+
+        fun pause(ctx: Context, id: UUID): Boolean {
+            val info = WorkManager.getInstance(ctx).getWorkInfoById(id).get() ?: return false
+            WorkManager.getInstance(ctx).cancelWorkById(id)
+            return info.state != WorkInfo.State.SUCCEEDED
+        }
+
+        fun resume(ctx: Context, id: UUID): UUID? {
+            val raw = ctx.getSharedPreferences(REQUESTS, Context.MODE_PRIVATE).getString(id.toString(), null) ?: return null
+            val split = raw.split("\n", limit = 2)
+            if (split.size != 2) return null
+            val files = split[1].split('\u0000').filter { it.isNotBlank() }
+            return enqueue(ctx, split[0], files)
+        }
+
+        fun forget(ctx: Context, id: UUID) {
+            ctx.getSharedPreferences(REQUESTS, Context.MODE_PRIVATE).edit().remove(id.toString()).apply()
         }
     }
 

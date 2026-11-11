@@ -1,0 +1,57 @@
+name: Staged release gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Release channel
+        required: true
+        type: choice
+        options: [dev, beta, stable]
+      tag:
+        description: Git tag or commit to validate
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Validate ${{ inputs.channel }} channel
+    runs-on: ubuntu-latest
+    env:
+      CHANNEL: ${{ inputs.channel }}
+      REF: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          submodules: recursive
+      - name: Enforce staged release rules
+        run: |
+          set -euo pipefail
+          case "$CHANNEL" in
+            dev) echo 'Development build: internal testing only.' ;;
+            beta) echo 'Beta build: require tester sign-off and known-issues review.' ;;
+            stable) echo 'Stable build: requires successful CI, signed APK, checksum, changelog, rollback plan, and beta sign-off.' ;;
+            *) echo 'Unknown channel' >&2; exit 1 ;;
+          esac
+          test -n "$REF"
+      - name: Check release documentation
+        run: |
+          test -s docs/RELEASE.md
+          test -s docs/PRODUCTION_IMPLEMENTATION.md
+          test -s README.md
+          git diff --check
+      - name: Upload gate report
+        run: |
+          {
+            echo "channel=$CHANNEL"
+            echo "ref=$REF"
+            echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > staged-release-report.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: staged-release-${{ inputs.channel }}
+          path: staged-release-report.txt

@@ -12,6 +12,8 @@ Dokumen ini mencatat bagian dari `docs/CATATAN_PRODUCTION_1-18.txt` yang sudah d
 - **Device Health Check:** modul model menyediakan snapshot RAM total/bebas, storage bebas, CPU core, ABI, SDK, low-memory state, rekomendasi ukuran model, serta peringatan sebelum model besar dimuat.
 - **Model Library safeguards:** daftar model lokal menampilkan ukuran dan SHA-256. Model nonaktif dapat dihapus setelah konfirmasi pengguna; model aktif ditolak untuk dihapus agar tidak membuat konfigurasi rusak.
 - **Download model:** WorkManager tetap digunakan untuk job background, resume byte, retry jaringan, progress, cancel, pemeriksaan ruang, dan verifikasi SHA-256 dari Hugging Face bila tersedia.
+- **Download controls:** request download disimpan secara lokal sehingga unduhan aktif dapat dijeda dan dilanjutkan kembali; UI menampilkan filter ukuran dan quantization GGUF.
+- **Staged release:** `.github/workflows/staged-release.yml` menyediakan gate manual `dev`, `beta`, dan `stable` dengan pemeriksaan dokumentasi serta laporan artefak.
 - **UI:** halaman Hardware sekarang menampilkan health check; halaman Model lokal menampilkan checksum dan aksi `Pakai`/`Hapus`.
 
 ## Cara verifikasi
@@ -37,7 +39,7 @@ Item berikut memerlukan infrastruktur atau pengujian eksternal dan tidak boleh d
 - Branch protection dan aturan wajib PR harus diaktifkan pada pengaturan GitHub.
 - Crash reporting privat belum dipasang; jangan kirim isi chat, token, dataset, atau model ke layanan telemetry.
 - Staged release dan beta tester memerlukan channel distribusi serta perangkat nyata.
-- Onboarding multi-langkah, filter Hugging Face lengkap, pause/resume UI tingkat lanjut, dan riwayat download terpusat masih bertahap.
+- Onboarding multi-langkah penuh, filter metadata Hugging Face lintas repository, dan riwayat download terpusat masih bertahap. Filter ukuran/quantization dan pause/resume aktif untuk alur download saat ini.
 - APK release production tetap membutuhkan keystore privat, verifikasi signature, dan uji instal/update pada perangkat.
 - Training on-device, vision, TTS/STT, dan runtime ONNX tetap memiliki batasan seperti yang dijelaskan di `docs/STATUS.md`.
 

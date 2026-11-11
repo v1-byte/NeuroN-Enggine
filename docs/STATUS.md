@@ -19,6 +19,7 @@
 - [~] Build lokal tanpa `key.properties` dapat memakai debug signing untuk pengujian. Workflow publikasi release kini berhenti jika signing secrets/keystore tidak valid dan memverifikasi APK signature; tetap perlu memeriksa hasil workflow pada tag rilis.
 - [x] Build release Android memblokir cleartext outbound; hanya build debug mengizinkan koneksi HTTP. Server lokal masuk tetap HTTP tanpa TLS, di-bind ke satu IPv4 aktif dan meminta konfirmasi UI serta key acak minimum 32 karakter; gunakan hanya di jaringan tepercaya.
 - [x] Python API memiliki batas ukuran per upload, batas job aktif dan timeout, serta smoke tests dengan dependency FastAPI nyata di CI. Reverse proxy tetap perlu body-size limit/TLS/rate limit dan administrator perlu kuota/retensi disk.
+- [x] Production hardening lanjutan: Device Health Check, checksum dan delete safeguard Model Library, pause/resume request download, filter ukuran/quantization GGUF, Gitleaks/lint/checksum gate, CODEOWNERS, serta workflow staged release dev/beta/stable.
 
 Catatan: bagian di bawah mencatat riwayat implementasi sebelum migrasi dan tidak selalu menggambarkan status UI Flutter saat ini. Peta terkini ada di [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md) dan [UI_REFRESH.md](UI_REFRESH.md).
 

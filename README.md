@@ -6,7 +6,7 @@
 
 **NeuroN Engine** adalah engine AI lokal untuk Android. Aplikasi ini menjalankan model GGUF di perangkat (llama.cpp), atau memakai API OpenAI-compatible, lalu menyediakan konfigurasi model, RAG, server lokal OpenAI-compatible, copilot untuk memperbaiki konfigurasi, dan pelatihan LoRA lewat server Python.
 
-> **Status: alpha hardening (v0.2.8).** Selain shell Flutter, engine lokal/API, RAG, Hugging Face, dan training remote, repository sekarang memiliki gate CI untuk test/lint/secret/checksum, CODEOWNERS, Device Health Check, checksum Model Library, serta penghapusan model dengan konfirmasi. Fitur belum diuji pada semua perangkat dan belum boleh disebut production-ready sebelum staged release, signing, dan uji perangkat nyata. Lihat [Status fitur](#status-fitur), [implementasi production](docs/PRODUCTION_IMPLEMENTATION.md), [catatan production](docs/CATATAN_PRODUCTION_1-18.txt), dan [docs/RELEASE.md](docs/RELEASE.md).
+> **Status: alpha hardening (v0.2.8).** Selain shell Flutter, engine lokal/API, RAG, Hugging Face, dan training remote, repository sekarang memiliki gate CI untuk test/lint/secret/checksum, CODEOWNERS, Device Health Check, checksum Model Library, penghapusan model dengan konfirmasi, pause/resume download, filter ukuran/quantization, dan gate staged release dev/beta/stable. Fitur belum diuji pada semua perangkat dan belum boleh disebut production-ready sebelum signing, beta sign-off, dan uji perangkat nyata. Lihat [Status fitur](#status-fitur), [implementasi production](docs/PRODUCTION_IMPLEMENTATION.md), [catatan production](docs/CATATAN_PRODUCTION_1-18.txt), dan [docs/RELEASE.md](docs/RELEASE.md).
 
 ---
 
@@ -40,7 +40,7 @@
 | **UI Android** | Beranda, Chat, Library, Import Center, Activity, Workspace editor, tema, tutorial, animasi | `flutter_app/` (Flutter) |
 | **Konfigurasi** | 7 bagian config dalam satu file project: parameter chat, file model, tokenizer, pengetahuan tambahan, pelatihan ulang, hardware, fitur | `model/`, `project/` |
 | **Engine** | Antarmuka `InferenceEngine` dengan dua implementasi: llama.cpp lokal (JNI) dan API OpenAI-compatible | `engine/` |
-| **Hugging Face** | Cari dan unduh model: resume, WorkManager, verifikasi SHA-256, token untuk model gated | `hf/` |
+| **Hugging Face** | Cari dan unduh model: resume, pause/resume, WorkManager, verifikasi SHA-256, filter ukuran/quantization, token untuk model gated | `hf/` |
 | **RAG** | Pemrosesan dokumen (txt, md, docx, pdf), chunking, vector store SQLite, sumber di jawaban | `rag/` |
 | **Server lokal** | Endpoint OpenAI-compatible di HP (`/v1/chat/completions`, `/v1/models`, `/v1/embeddings`, `/health`), API key, SSE | `server/` |
 | **Copilot** | Saran patch config (diff, terima/tolak), eval sebelum/sesudah, cek konsistensi tokenizer | `copilot/` |

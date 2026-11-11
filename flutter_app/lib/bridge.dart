@@ -192,6 +192,14 @@ class Bridge {
       Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>(
               'hfDownloadState', {'id': id}) ??
           const {});
+  static Future<Map<String, dynamic>> hfPauseDownload(String id) async =>
+      Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>(
+              'hfPauseDownload', {'id': id}) ??
+          const {});
+  static Future<Map<String, dynamic>> hfResumeDownload(String id) async =>
+      Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>(
+              'hfResumeDownload', {'id': id}) ??
+          const {});
   static Future<void> hfCancelDownload(String id) async {
     await _project.invokeMethod<dynamic>('hfCancelDownload', {'id': id});
   }

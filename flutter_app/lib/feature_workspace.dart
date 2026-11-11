@@ -33,6 +33,9 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
   Map<String, dynamic> _rag = {};
   String? _repoSelected;
   String? _downloadId;
+  bool _downloadPaused = false;
+  String _sizeFilter = 'Semua';
+  String _quantFilter = 'Semua';
   Timer? _downloadPoll;
   Map<String, dynamic> _downloadState = const {};
   Map<String, dynamic> _health = const {};
@@ -167,6 +170,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
       _downloadId = started['id']?.toString();
       if (_downloadId == null) throw Exception('ID unduhan tidak tersedia');
       _downloadState = <String, dynamic>{'state': 'enqueued', 'file': file, 'done': 0, 'total': -1};
+      _downloadPaused = false;
       setState(() => _status = 'Unduhan berjalan di background…');
       _downloadPoll?.cancel();
       _downloadPoll = Timer.periodic(const Duration(milliseconds: 500), (_) => _pollDownload());
@@ -208,6 +212,35 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
     await Bridge.hfCancelDownload(id);
     _downloadPoll?.cancel();
     if (mounted) setState(() { _downloadId = null; _status = 'Permintaan pembatalan dikirim.'; });
+  }
+
+  Future<void> _pauseOrResumeDownload() async {
+    final id = _downloadId;
+    if (id == null) return;
+    if (_downloadPaused) {
+      final resumed = await Bridge.hfResumeDownload(id);
+      if (mounted) setState(() { _downloadId = resumed['id']?.toString() ?? id; _downloadPaused = false; _status = 'Unduhan dilanjutkan.'; });
+      _downloadPoll?.cancel();
+      _downloadPoll = Timer.periodic(const Duration(milliseconds: 500), (_) => _pollDownload());
+    } else {
+      await Bridge.hfPauseDownload(id);
+      _downloadPoll?.cancel();
+      if (mounted) setState(() { _downloadPaused = true; _status = 'Unduhan dijeda. Resume tetap tersedia.'; });
+    }
+  }
+
+  bool _fileVisible(Map<String, dynamic> file) {
+    final name = '${file['name']}'.toUpperCase();
+    final size = (file['size'] as num?)?.toDouble() ?? 0;
+    final sizeOk = switch (_sizeFilter) {
+      '≤ 1 GB' => size <= 1e9,
+      '1–3 GB' => size > 1e9 && size <= 3e9,
+      '3–8 GB' => size > 3e9 && size <= 8e9,
+      '> 8 GB' => size > 8e9,
+      _ => true,
+    };
+    final quantOk = _quantFilter == 'Semua' || name.contains(_quantFilter);
+    return sizeOk && quantOk;
   }
 
   Future<void> _addKnowledge() async {
@@ -418,6 +451,11 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
       TextField(controller: _hfToken, obscureText: true, decoration: const InputDecoration(labelText: 'Token HF (opsional)', hintText: 'hf_…')),
       Align(alignment: Alignment.centerLeft, child: TextButton(onPressed: _busy ? null : () => _run(() async { await Bridge.saveHfToken(_hfToken.text.trim()); setState(() => _status = 'Token disimpan terenkripsi.'); }), child: const Text('Simpan token'))),
       Row(children: [Expanded(child: TextField(controller: _query, onSubmitted: (_) => _searchHf(), decoration: const InputDecoration(labelText: 'Cari model', hintText: 'llama 3 gguf'))), const SizedBox(width: 8), IconButton.filled(onPressed: _busy ? null : _searchHf, icon: const Icon(Icons.search))]),
+      const SizedBox(height: 8),
+      Align(alignment: Alignment.centerLeft, child: Wrap(spacing: 6, runSpacing: 4, children: [
+        DropdownButton<String>(value: _sizeFilter, items: const ['Semua', '≤ 1 GB', '1–3 GB', '3–8 GB', '> 8 GB'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => _sizeFilter = v ?? 'Semua')),
+        DropdownButton<String>(value: _quantFilter, items: const ['Semua', 'Q4_K_M', 'Q5_K_M', 'Q8_0', 'F16'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => _quantFilter = v ?? 'Semua')),
+      ])),
       if (_models.isNotEmpty) ...[
         const SizedBox(height: 10),
         const Align(alignment: Alignment.centerLeft, child: Text('Pilih repository model', style: TextStyle(fontWeight: FontWeight.w700))),
@@ -438,7 +476,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
             },
             children: [
               if (_repoSelected == model['id'] && _files.isEmpty) const Padding(padding: EdgeInsets.all(12), child: Align(alignment: Alignment.centerLeft, child: Text('Memuat file GGUF…', style: TextStyle(color: muted, fontSize: 11)))),
-              if (_repoSelected == model['id']) for (final file in _files) ListTile(
+              if (_repoSelected == model['id']) for (final file in _files.where(_fileVisible)) ListTile(
                 dense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                 leading: const Icon(Icons.insert_drive_file_outlined, size: 20, color: blue),
@@ -458,7 +496,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
           return Column(children: [
             LinearProgressIndicator(value: total > 0 ? (done / total).clamp(0, 1).toDouble() : null),
             const SizedBox(height: 5),
-            Row(children: [Expanded(child: Text('${_downloadState['file'] ?? 'Menyiapkan…'} · ${_bytes(done)} / ${_bytes(total)}', style: const TextStyle(fontSize: 11, color: muted))), TextButton(onPressed: _cancelDownload, child: const Text('Batal'))]),
+            Row(children: [Expanded(child: Text('${_downloadState['file'] ?? 'Menyiapkan…'} · ${_bytes(done)} / ${_bytes(total)}', style: const TextStyle(fontSize: 11, color: muted))), TextButton(onPressed: _pauseOrResumeDownload, child: Text(_downloadPaused ? 'Lanjutkan' : 'Jeda')), TextButton(onPressed: _cancelDownload, child: const Text('Batal'))]),
           ]);
         }),
       ],
