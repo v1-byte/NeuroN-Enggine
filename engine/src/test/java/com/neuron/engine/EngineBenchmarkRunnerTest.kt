@@ -28,7 +28,7 @@ class EngineBenchmarkRunnerTest {
     fun reportsLatencyOutputAndDeterministicSampling() = runBlocking {
         val engine = BenchmarkFakeEngine()
         val results = EngineBenchmarkRunner(engine).run(
-            AiProject(), prompts = listOf("prompt uji"), maxTokens = 32,
+            AiProject(name = "benchmark-test"), prompts = listOf("prompt uji"), maxTokens = 32,
         )
 
         assertEquals(1, results.size)
@@ -46,6 +46,6 @@ class EngineBenchmarkRunnerTest {
 
     @Test(expected = IllegalArgumentException::class)
     fun rejectsEmptyPromptList() = runBlocking {
-        EngineBenchmarkRunner(BenchmarkFakeEngine()).run(AiProject(), prompts = emptyList())
+        EngineBenchmarkRunner(BenchmarkFakeEngine()).run(AiProject(name = "benchmark-test"), prompts = emptyList())
     }
 }

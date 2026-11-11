@@ -38,10 +38,9 @@ class HfDownloadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker
         private const val MAX_ATTEMPTS = 3
         private const val REQUESTS = "hf_download_requests"
         private const val HISTORY = "hf_download_history"
+        private const val QUEUE_NAME = "hf-download-queue"
 
-        fun uniqueName(repoId: String) = "hf-download-$repoId"
-
-        /** Antrekan unduhan; satu repo/file hanya satu unduhan aktif. */
+        /** Antrekan semua repo secara serial; pekerjaan lama tidak diganti oleh permintaan baru. */
         fun enqueue(ctx: Context, repoId: String, files: List<String>): UUID {
             val input = Data.Builder()
                 .putString(KEY_REPO, repoId)
@@ -51,7 +50,7 @@ class HfDownloadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker
                 .setInputData(input)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .build()
-            WorkManager.getInstance(ctx).enqueueUniqueWork(uniqueName(repoId), ExistingWorkPolicy.REPLACE, req)
+            WorkManager.getInstance(ctx).enqueueUniqueWork(QUEUE_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, req)
             ctx.getSharedPreferences(REQUESTS, Context.MODE_PRIVATE).edit()
                 .putString(req.id.toString(), "$repoId\n${files.joinToString("\u0000")}").apply()
             updateHistory(ctx, req.id, repoId, files.firstOrNull().orEmpty(), "queued")
