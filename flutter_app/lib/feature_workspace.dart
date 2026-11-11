@@ -435,7 +435,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
         OutlinedButton.icon(onPressed: _busy ? null : () => _loadHealth(), icon: const Icon(Icons.refresh), label: const Text('Periksa ulang')),
       ])),
       _message(),
-    ];
+    ]);
   }
 
   Widget _metric(String label, String value) => Container(
