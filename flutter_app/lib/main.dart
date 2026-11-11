@@ -220,6 +220,7 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
       await _open(_chatPath);
       await _refreshEngine();
       await _refreshDashboardData();
+      await _maybeShowFirstRunOnboarding();
       await _maybeCheckUpdate();
     } catch (e) {
       _log('ERROR', 'Proyek tidak bisa dibuka: $e');
@@ -251,6 +252,13 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
     } catch (e) {
       _log('WARN', 'Pemeriksaan update dilewati: $e');
     }
+  }
+
+  Future<void> _maybeShowFirstRunOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted || prefs.getBool('neuron_onboarding_completed') == true) return;
+    await showNeuroNTutorial(context);
+    await prefs.setBool('neuron_onboarding_completed', true);
   }
 
   String _formatBytes(dynamic value) {
@@ -701,6 +709,27 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _exportChatHistory() async {
+    if (_lines.isEmpty) {
+      toast('Belum ada percakapan untuk diekspor');
+      return;
+    }
+    final content = [
+      '# Riwayat Chat NeuroN',
+      '',
+      'Diekspor: ${DateTime.now().toLocal().toIso8601String()}',
+      '',
+      ..._lines.map((line) => '## ${line.role}\n\n${line.text}\n'),
+    ].join('\n');
+    try {
+      await Bridge.exportChatHistory(content);
+      toast('Pilih aplikasi tujuan untuk menyimpan atau membagikan ekspor');
+    } catch (e) {
+      _log('ERROR', 'Ekspor riwayat chat gagal: $e');
+      toast('Riwayat chat gagal diekspor');
+    }
+  }
+
   Future<void> _showWorkspaceFiles() async {
     final selected = await showModalBottomSheet<String>(
       context: context,
@@ -927,6 +956,13 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
               tooltip: 'Atur engine',
               onPressed: _openEngine,
               icon: const Icon(Icons.tune, size: 19),
+            ),
+            IconButton(
+              tooltip: 'Ekspor riwayat chat',
+              onPressed: _lines.isEmpty || _streaming || _clearingChat
+                  ? null
+                  : _exportChatHistory,
+              icon: const Icon(Icons.ios_share_outlined, size: 19),
             ),
             IconButton(
               tooltip: 'Percakapan baru',

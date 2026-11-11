@@ -32,6 +32,21 @@ void main() {
         case 'clearChatHistory':
           stored.clear();
           return {'ok': true};
+        case 'shareChatExport':
+          stored['export'] = Map<String, dynamic>.from(call.arguments as Map);
+          return {'ok': true};
+        case 'runEngineBenchmark':
+          return [
+            {
+              'prompt': 'Tes',
+              'elapsedMs': 120,
+              'firstTokenMs': 45,
+              'outputCharacters': 4,
+              'outputPreview': 'Siap',
+              'completionTokens': 2,
+              'tokensPerSecond': 16.7,
+            }
+          ];
         case 'loadDrafts':
           return stored['drafts'] ?? <String, String>{};
         case 'saveDraft':
@@ -83,6 +98,18 @@ void main() {
   test('clears persisted chat history', () async {
     await Bridge.clearChatHistory();
     expect(calls.single.method, 'clearChatHistory');
+  });
+
+  test('exports chat history as markdown through native share bridge', () async {
+    await Bridge.exportChatHistory('# Riwayat Chat NeuroN');
+    expect(calls.single.method, 'shareChatExport');
+    expect((stored['export'] as Map)['content'], '# Riwayat Chat NeuroN');
+  });
+
+  test('loads engine benchmark metrics from native bridge', () async {
+    final results = await Bridge.runEngineBenchmark();
+    expect(results.single['elapsedMs'], 120);
+    expect(results.single['tokensPerSecond'], 16.7);
   });
 
   test('saves and restores an unsaved editor draft', () async {

@@ -30,6 +30,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
   List<Map<String, dynamic>> _files = [];
   List<Map<String, dynamic>> _localModels = [];
   List<Map<String, dynamic>> _downloadHistory = [];
+  List<Map<String, dynamic>> _benchmarkResults = [];
   Map<String, dynamic> _server = {};
   Map<String, dynamic> _rag = {};
   String? _repoSelected;
@@ -116,11 +117,31 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
 
   Future<void> _loadHealth({int modelSize = 0}) async {
     try {
-      final health = await Bridge.deviceHealth(modelSize: modelSize);
-      if (mounted) setState(() => _health = health);
+      final values = await Future.wait<dynamic>([
+        Bridge.deviceHealth(modelSize: modelSize),
+        Bridge.localModels(),
+      ]);
+      if (mounted) {
+        setState(() {
+          _health = Map<String, dynamic>.from(values[0] as Map);
+          _localModels = List<Map<String, dynamic>>.from(values[1] as List);
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _status = 'Health check belum dapat diakses: $e');
     }
+  }
+
+  List<Map<String, dynamic>> _recommendedLocalModels() {
+    final maxBytes = (_health['recommendedMaxModel'] as num?)?.toInt() ?? 0;
+    if (maxBytes <= 0) return const [];
+    final fitting = _localModels.where((model) {
+      final size = (model['size'] as num?)?.toInt() ?? 0;
+      return size > 0 && size <= maxBytes;
+    }).toList()
+      ..sort((a, b) => ((b['size'] as num?)?.toInt() ?? 0)
+          .compareTo((a['size'] as num?)?.toInt() ?? 0));
+    return fitting.take(3).toList(growable: false);
   }
 
   Future<void> _loadDownloadHistory() async {
@@ -355,6 +376,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
       'Latih' => TrainingPage(onLog: widget.onLog),
       'Copilot' => _copilotPage(),
       'Hardware' => _hardwarePage(),
+      'Benchmark' => _benchmarkPage(),
       _ => _pendingPage(Icons.info_outline, widget.page, 'Fitur ini belum memiliki layar aktif.'),
       },
     ]);
@@ -416,6 +438,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
 
   Widget _hardwarePage() {
     final warnings = ((_health['warnings'] as List?) ?? const []).map((e) => e.toString()).toList();
+    final modelSuggestions = _recommendedLocalModels();
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       _card('Device Health Check', 'Periksa RAM, storage, ABI, dan kondisi perangkat sebelum memuat model besar.', icon: Icons.health_and_safety_outlined, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Wrap(spacing: 8, runSpacing: 8, children: [
@@ -427,6 +450,21 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
         const SizedBox(height: 10),
         Text('ABI: ${_health['abi'] ?? 'memuat…'}', style: const TextStyle(fontSize: 11, color: muted)),
         Text('Rekomendasi ukuran model: ${_bytes(_health['recommendedMaxModel'])}', style: const TextStyle(fontSize: 11, color: muted)),
+        const SizedBox(height: 10),
+        const Text('Model lokal yang sesuai perkiraan RAM', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+        const SizedBox(height: 4),
+        if (modelSuggestions.isEmpty)
+          const Text('Belum ada model lokal yang dapat direkomendasikan. Impor atau unduh GGUF, lalu periksa kembali.', style: TextStyle(fontSize: 11, color: muted))
+        else
+          for (final model in modelSuggestions) ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text('${model['name']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11)),
+            subtitle: Text('${_bytes(model['size'])}${model['active'] == true ? ' · aktif' : ''}', style: const TextStyle(fontSize: 10, color: muted)),
+            trailing: model['active'] == true
+                ? const Icon(Icons.check_circle, color: Colors.greenAccent, size: 18)
+                : TextButton(onPressed: _busy ? null : () => _activateLocalModel('${model['path']}'), child: const Text('Pakai')),
+          ),
         if (warnings.isNotEmpty) ...[
           const SizedBox(height: 8),
           for (final warning in warnings) Padding(padding: const EdgeInsets.only(bottom: 4), child: Text('⚠ $warning', style: const TextStyle(color: Colors.orangeAccent, fontSize: 11))),
@@ -437,6 +475,39 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
       _message(),
     ]);
   }
+
+  Future<void> _runEngineBenchmark() async => _run(() async {
+        final results = await Bridge.runEngineBenchmark();
+        if (!mounted) return;
+        setState(() => _benchmarkResults = results);
+        widget.onLog('INFO', 'Benchmark engine selesai (${results.length} prompt)');
+        setState(() => _status = 'Benchmark selesai: ${results.length} prompt.');
+      });
+
+  Widget _benchmarkPage() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        _card(
+          'Benchmark engine',
+          'Jalankan tiga prompt tetap untuk mengukur waktu respons, token pertama, dan throughput jika engine melaporkan jumlah token. Sampling memakai temperature 0 dan seed tetap.',
+          icon: Icons.speed_outlined,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Jika memakai engine API, tombol ini mengirim tiga permintaan ke penyedia Anda dan dapat menimbulkan biaya. Jalankan hanya saat siap.', style: TextStyle(fontSize: 11, color: muted)),
+            const SizedBox(height: 10),
+            FilledButton.icon(onPressed: _busy ? null : _runEngineBenchmark, icon: const Icon(Icons.play_arrow), label: const Text('Jalankan benchmark')),
+            if (_benchmarkResults.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              for (final sample in _benchmarkResults) Card(
+                color: panel2,
+                child: ListTile(
+                  dense: true,
+                  title: Text('${sample['elapsedMs']} ms · token pertama ${sample['firstTokenMs'] ?? '—'} ms', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                  subtitle: Text('Karakter ${sample['outputCharacters']} · token/detik ${sample['tokensPerSecond'] ?? 'tidak dilaporkan'}\n${sample['outputPreview']}', maxLines: 4, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: muted)),
+                ),
+              ),
+            ],
+          ]),
+        ),
+        _message(),
+      ]);
 
   Widget _metric(String label, String value) => Container(
         padding: const EdgeInsets.all(10),
