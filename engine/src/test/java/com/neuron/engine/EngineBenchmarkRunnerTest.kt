@@ -45,7 +45,9 @@ class EngineBenchmarkRunnerTest {
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun rejectsEmptyPromptList() = runBlocking {
-        EngineBenchmarkRunner(BenchmarkFakeEngine()).run(AiProject(name = "benchmark-test"), prompts = emptyList())
+    fun rejectsEmptyPromptList() {
+        runBlocking {
+            EngineBenchmarkRunner(BenchmarkFakeEngine()).run(AiProject(name = "benchmark-test"), prompts = emptyList())
+        }
     }
 }
