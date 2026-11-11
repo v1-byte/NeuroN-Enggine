@@ -6,7 +6,7 @@
 
 **NeuroN Engine** adalah engine AI lokal untuk Android. Aplikasi ini menjalankan model GGUF di perangkat (llama.cpp), atau memakai API OpenAI-compatible, lalu menyediakan konfigurasi model, RAG, server lokal OpenAI-compatible, copilot untuk memperbaiki konfigurasi, dan pelatihan LoRA lewat server Python.
 
-> **Status: alpha hardening (v0.2.8).** Selain shell Flutter, engine lokal/API, RAG, Hugging Face, dan training remote, repository sekarang memiliki gate CI untuk test/lint/secret/checksum, CODEOWNERS, Device Health Check, checksum Model Library, penghapusan model dengan konfirmasi, pause/resume download, filter ukuran/quantization, dan gate staged release dev/beta/stable. Fitur belum diuji pada semua perangkat dan belum boleh disebut production-ready sebelum signing, beta sign-off, dan uji perangkat nyata. Lihat [Status fitur](#status-fitur), [implementasi production](docs/PRODUCTION_IMPLEMENTATION.md), [catatan production](docs/CATATAN_PRODUCTION_1-18.txt), dan [docs/RELEASE.md](docs/RELEASE.md).
+> **Status: kandidat beta (v0.2.9-beta.1), bukan stable.** Perubahan ini menambahkan onboarding awal, rekomendasi model berbasis RAM, ekspor riwayat chat, benchmark engine, serta antrean serial dan retry unduhan. CI, signing APK, beta sign-off, dan uji perangkat Android nyata tetap menjadi gerbang sebelum stable; validasi perangkat nyata belum tersedia pada lingkungan audit ini. Vision lokal, runtime ONNX, dan training on-device belum termasuk dalam beta ini. Lihat [Status fitur](#status-fitur), [implementasi production](docs/PRODUCTION_IMPLEMENTATION.md), [catatan production](docs/CATATAN_PRODUCTION_1-18.txt), dan [docs/RELEASE.md](docs/RELEASE.md).
 
 ---
 

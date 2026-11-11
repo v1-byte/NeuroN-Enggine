@@ -1,6 +1,6 @@
 # Status implementasi
 
-## Status UI Flutter aktual (2026-11-10)
+## Status UI Flutter aktual (2026-11-12)
 
 - [x] UI shell mobile-first: Beranda, Chat, Library, Import, dan Lainnya; Activity serta editor project berada di jalur sekunder.
 - [x] Rail editor-first ala IDE dihapus. Workspace mempertahankan editor konfigurasi dengan pemilih file pada header; tools tetap dapat dibuka dari Lainnya.
@@ -15,12 +15,14 @@
 - [x] HF model picker memakai accordion repository/file di tempat yang sama; GGUF besar memakai segmented HTTP Range hingga delapan koneksi paralel dengan fallback otomatis.
 - [x] Training remote sederhana mendukung LoRA/QLoRA; model GGUF dari ruang aplikasi atau file eksternal diunggah otomatis ke endpoint `/models` trainer sebelum job dimulai.
 - [~] Import multi-select/review, URL/cloud storage/transfer LAN, split train/val, grafik loss, serta ON_DEVICE belum tersedia. Training remote tahap awal sudah memiliki impor/validasi dataset, konfigurasi, job/progres, stop/sambung, dan unduhan adapter; belum dikompilasi atau diuji pada perangkat/server.
-- [~] Build APK dan test Android belum diverifikasi di lingkungan audit ini karena Flutter/Android SDK tidak tersedia. Jangan menganggap rilis siap sebelum job GitHub Actions dan uji perangkat lulus.
-- [~] Build lokal tanpa `key.properties` dapat memakai debug signing untuk pengujian. Workflow publikasi release kini berhenti jika signing secrets/keystore tidak valid dan memverifikasi APK signature; tetap perlu memeriksa hasil workflow pada tag rilis.
+- [~] `flutter analyze` dan seluruh Flutter tests lulus lokal. Android CI wajib hijau sebelum beta; uji perangkat nyata belum dapat dilakukan karena tidak ada perangkat Android authorized pada lingkungan audit ini.
+- [~] GitHub Actions memiliki signing secrets dan workflow rilis memvalidasi signature APK; hasil build/checksum/signature beta harus diverifikasi pada workflow tag rilis. Jangan mendistribusikan debug APK.
 - [x] Build release Android memblokir cleartext outbound; hanya build debug mengizinkan koneksi HTTP. Server lokal masuk tetap HTTP tanpa TLS, di-bind ke satu IPv4 aktif dan meminta konfirmasi UI serta key acak minimum 32 karakter; gunakan hanya di jaringan tepercaya.
 - [x] Python API memiliki batas ukuran per upload, batas job aktif dan timeout, serta smoke tests dengan dependency FastAPI nyata di CI. Reverse proxy tetap perlu body-size limit/TLS/rate limit dan administrator perlu kuota/retensi disk.
 - [x] Production hardening lanjutan: Device Health Check, checksum dan delete safeguard Model Library, pause/resume request download, filter ukuran/quantization GGUF, Gitleaks/lint/checksum gate, CODEOWNERS, serta workflow staged release dev/beta/stable.
-- [x] Model Experience dan Download Manager: metadata ukuran/RAM/waktu/SHA-256, rename, verifikasi, metadata viewer, riwayat 30 download, speed/ETA, status pekerjaan, serta kontrol pause/resume/cancel.
+- [x] Download Manager: antrean WorkManager serial lintas repository (`APPEND_OR_REPLACE`), retry jaringan hingga tiga percobaan, resume byte-range, progres/speed/ETA, riwayat, serta kontrol pause/resume/cancel.
+- [x] Onboarding first-run, rekomendasi model lokal berdasar estimasi RAM tersedia, ekspor chat history ke Markdown melalui Android share sheet, dan benchmark engine dengan prompt tetap serta metrik latensi/throughput.
+- [~] Beta v0.2.9-beta.1 menunggu Android CI hijau, APK release bertanda tangan, beta tester sign-off, dan validasi perangkat nyata; fitur vision lokal, ONNX, dan training on-device tetap di luar cakupan rilis ini.
 
 Catatan: bagian di bawah mencatat riwayat implementasi sebelum migrasi dan tidak selalu menggambarkan status UI Flutter saat ini. Peta terkini ada di [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md) dan [UI_REFRESH.md](UI_REFRESH.md).
 
