@@ -129,6 +129,12 @@ class Bridge {
   static Future<void> deleteLocalModel(String path) async {
     await _project.invokeMethod<dynamic>('deleteLocalModel', {'path': path});
   }
+  static Future<Map<String, dynamic>> renameLocalModel(String path, String name) async =>
+      Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>('renameLocalModel', {'path': path, 'name': name}) ?? const {});
+  static Future<Map<String, dynamic>> verifyLocalModel(String path) async =>
+      Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>('verifyLocalModel', {'path': path}) ?? const {});
+  static Future<Map<String, dynamic>> exportLocalModelMetadata(String path) async =>
+      Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>('exportLocalModelMetadata', {'path': path}) ?? const {});
   static Future<Map<String, dynamic>> deviceHealth({int modelSize = 0}) async =>
       Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>(
               'deviceHealth', {'modelSize': modelSize}) ??
@@ -192,6 +198,11 @@ class Bridge {
       Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>(
               'hfDownloadState', {'id': id}) ??
           const {});
+  static Future<List<Map<String, dynamic>>> hfDownloadHistory() async =>
+      (await _project.invokeListMethod<dynamic>('hfDownloadHistory') ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
   static Future<Map<String, dynamic>> hfPauseDownload(String id) async =>
       Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>(
               'hfPauseDownload', {'id': id}) ??

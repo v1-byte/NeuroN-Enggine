@@ -29,6 +29,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
   List<Map<String, dynamic>> _models = [];
   List<Map<String, dynamic>> _files = [];
   List<Map<String, dynamic>> _localModels = [];
+  List<Map<String, dynamic>> _downloadHistory = [];
   Map<String, dynamic> _server = {};
   Map<String, dynamic> _rag = {};
   String? _repoSelected;
@@ -49,6 +50,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
     if (widget.page == 'Data & RAG') _loadRag();
     if (widget.page == 'Model lokal') _loadLocalModels();
     if (widget.page == 'Hardware') _loadHealth();
+    if (widget.page == 'Hugging Face') _loadDownloadHistory();
   }
 
   @override
@@ -121,6 +123,15 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
     }
   }
 
+  Future<void> _loadDownloadHistory() async {
+    try {
+      final history = await Bridge.hfDownloadHistory();
+      if (mounted) setState(() => _downloadHistory = history);
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Riwayat download belum tersedia: $e');
+    }
+  }
+
   Future<void> _deleteLocalModel(String path) async {
     final confirmed = await showDialog<bool>(
           context: context,
@@ -140,6 +151,25 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
       await _loadLocalModels();
       setState(() => _status = 'Model dihapus dengan aman.');
     });
+  }
+
+  Future<void> _renameLocalModel(String path, String currentName) async {
+    final controller = TextEditingController(text: currentName.replaceAll(RegExp(r'\.gguf$'), ''));
+    final name = await showDialog<String>(context: context, builder: (dialogContext) => AlertDialog(title: const Text('Rename model'), content: TextField(controller: controller, autofocus: true, decoration: const InputDecoration(labelText: 'Nama model')), actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')), FilledButton(onPressed: () => Navigator.pop(dialogContext, controller.text), child: const Text('Simpan'))]));
+    controller.dispose();
+    if (name == null || name.trim().isEmpty) return;
+    await _run(() async { await Bridge.renameLocalModel(path, name.trim()); await _loadLocalModels(); setState(() => _status = 'Nama model diperbarui.'); });
+  }
+
+  Future<void> _verifyLocalModel(String path) async => _run(() async {
+        final result = await Bridge.verifyLocalModel(path);
+        setState(() => _status = 'Verifikasi berhasil. SHA-256: ${result['sha256']}');
+      });
+
+  Future<void> _showModelMetadata(String path) async {
+    final metadata = await Bridge.exportLocalModelMetadata(path);
+    if (!mounted) return;
+    await showDialog<void>(context: context, builder: (dialogContext) => AlertDialog(title: const Text('Metadata model'), content: SelectableText(metadata.entries.map((e) => '${e.key}: ${e.value}').join('\n')), actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Tutup'))]));
   }
 
   Future<void> _activateLocalModel(String path) async => _run(() async {
@@ -203,6 +233,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
         }
       }
       setState(() => _status = status == 'succeeded' ? 'Unduhan selesai: ${state['path']}' : status == 'cancelled' ? 'Unduhan dibatalkan.' : 'Unduhan gagal: ${state['error']}');
+      await _loadDownloadHistory();
     }
   }
 
@@ -361,11 +392,19 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
           trailing: model['active'] == true
               ? const Text('AKTIF', style: TextStyle(fontSize: 9, color: Colors.greenAccent, fontWeight: FontWeight.bold))
               : PopupMenuButton<String>(
-                  onSelected: (action) => action == 'use'
-                      ? _activateLocalModel('${model['path']}')
-                      : _deleteLocalModel('${model['path']}'),
+                  onSelected: (action) {
+                    final path = '${model['path']}';
+                    if (action == 'use') _activateLocalModel(path);
+                    if (action == 'delete') _deleteLocalModel(path);
+                    if (action == 'rename') _renameLocalModel(path, '${model['name']}');
+                    if (action == 'verify') _verifyLocalModel(path);
+                    if (action == 'metadata') _showModelMetadata(path);
+                  },
                   itemBuilder: (_) => const [
                     PopupMenuItem(value: 'use', child: Text('Pakai')),
+                    PopupMenuItem(value: 'rename', child: Text('Rename')),
+                    PopupMenuItem(value: 'verify', child: Text('Verifikasi SHA-256')),
+                    PopupMenuItem(value: 'metadata', child: Text('Lihat metadata')),
                     PopupMenuItem(value: 'delete', child: Text('Hapus')),
                   ],
                 ),
@@ -496,9 +535,15 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
           return Column(children: [
             LinearProgressIndicator(value: total > 0 ? (done / total).clamp(0, 1).toDouble() : null),
             const SizedBox(height: 5),
-            Row(children: [Expanded(child: Text('${_downloadState['file'] ?? 'Menyiapkan…'} · ${_bytes(done)} / ${_bytes(total)}', style: const TextStyle(fontSize: 11, color: muted))), TextButton(onPressed: _pauseOrResumeDownload, child: Text(_downloadPaused ? 'Lanjutkan' : 'Jeda')), TextButton(onPressed: _cancelDownload, child: const Text('Batal'))]),
+            Row(children: [Expanded(child: Text('${_downloadState['file'] ?? 'Menyiapkan…'} · ${_bytes(done)} / ${_bytes(total)} · ${_rate(_downloadState['speed'])} · ETA ${_eta(_downloadState['eta'])}', style: const TextStyle(fontSize: 11, color: muted))), TextButton(onPressed: _pauseOrResumeDownload, child: Text(_downloadPaused ? 'Lanjutkan' : 'Jeda')), TextButton(onPressed: _cancelDownload, child: const Text('Batal'))]),
           ]);
         }),
+      ],
+      if (_downloadHistory.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        const Align(alignment: Alignment.centerLeft, child: Text('Riwayat download', style: TextStyle(fontWeight: FontWeight.w700))),
+        const SizedBox(height: 5),
+        for (final item in _downloadHistory.take(10)) ListTile(dense: true, contentPadding: EdgeInsets.zero, leading: Icon(_historyIcon('${item['state']}'), color: _historyColor('${item['state']}')), title: Text('${item['file']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11)), subtitle: Text('${item['repo']} · ${item['state']}${item['error'].toString().isEmpty ? '' : ' · ${item['error']}' }', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: muted))),
       ],
       const SizedBox(height: 5), const Text('Unduhan memakai WorkManager foreground job, resume dari byte terakhir, menampilkan progres per-byte, dan dapat dibatalkan.', style: TextStyle(fontSize: 11, color: muted)),
     ])), _message(),
@@ -567,6 +612,10 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
   ]);
 
   String _bytes(dynamic value) { final n = value is num ? value.toDouble() : 0.0; if (n <= 0) return 'ukuran tidak diketahui'; if (n >= 1e9) return '${(n / 1e9).toStringAsFixed(1)} GB'; return '${(n / 1e6).toStringAsFixed(0)} MB'; }
+  String _rate(dynamic value) { final n = value is num ? value.toDouble() : 0.0; return n <= 0 ? '—' : '${_bytes(n)}/s'; }
+  String _eta(dynamic value) { final n = value is num ? value.toInt() : -1; if (n < 0) return '—'; if (n < 60) return '${n}s'; return '${n ~/ 60}m'; }
+  IconData _historyIcon(String state) => switch (state) { 'succeeded' => Icons.check_circle_outline, 'failed' => Icons.error_outline, 'paused' => Icons.pause_circle_outline, _ => Icons.downloading_outlined };
+  Color _historyColor(String state) => switch (state) { 'succeeded' => Colors.greenAccent, 'failed' => Colors.redAccent, 'paused' => Colors.orangeAccent, _ => blue };
 
   Widget _pendingPage(IconData icon, String title, String detail) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [_card(title, detail, icon: icon), _message()]);
 }

@@ -20,6 +20,7 @@
 - [x] Build release Android memblokir cleartext outbound; hanya build debug mengizinkan koneksi HTTP. Server lokal masuk tetap HTTP tanpa TLS, di-bind ke satu IPv4 aktif dan meminta konfirmasi UI serta key acak minimum 32 karakter; gunakan hanya di jaringan tepercaya.
 - [x] Python API memiliki batas ukuran per upload, batas job aktif dan timeout, serta smoke tests dengan dependency FastAPI nyata di CI. Reverse proxy tetap perlu body-size limit/TLS/rate limit dan administrator perlu kuota/retensi disk.
 - [x] Production hardening lanjutan: Device Health Check, checksum dan delete safeguard Model Library, pause/resume request download, filter ukuran/quantization GGUF, Gitleaks/lint/checksum gate, CODEOWNERS, serta workflow staged release dev/beta/stable.
+- [x] Model Experience dan Download Manager: metadata ukuran/RAM/waktu/SHA-256, rename, verifikasi, metadata viewer, riwayat 30 download, speed/ETA, status pekerjaan, serta kontrol pause/resume/cancel.
 
 Catatan: bagian di bawah mencatat riwayat implementasi sebelum migrasi dan tidak selalu menggambarkan status UI Flutter saat ini. Peta terkini ada di [MIGRASI_FLUTTER.md](MIGRASI_FLUTTER.md) dan [UI_REFRESH.md](UI_REFRESH.md).
 

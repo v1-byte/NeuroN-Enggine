@@ -37,10 +37,10 @@
 
 | Area | Yang disediakan | Lokasi |
 |---|---|---|
-| **UI Android** | Beranda, Chat, Library, Import Center, Activity, Workspace editor, tema, tutorial, animasi | `flutter_app/` (Flutter) |
+| **UI Android** | Beranda, Chat, Library, Import Center, Activity, Workspace editor, Model Library metadata/verify/rename, Download Manager, tema, tutorial, animasi | `flutter_app/` (Flutter) |
 | **Konfigurasi** | 7 bagian config dalam satu file project: parameter chat, file model, tokenizer, pengetahuan tambahan, pelatihan ulang, hardware, fitur | `model/`, `project/` |
 | **Engine** | Antarmuka `InferenceEngine` dengan dua implementasi: llama.cpp lokal (JNI) dan API OpenAI-compatible | `engine/` |
-| **Hugging Face** | Cari dan unduh model: resume, pause/resume, WorkManager, verifikasi SHA-256, filter ukuran/quantization, token untuk model gated | `hf/` |
+| **Hugging Face** | Download Manager: resume/pause, retry, speed/ETA, riwayat status, WorkManager, verifikasi SHA-256, filter ukuran/quantization, token gated | `hf/`, `flutter_app/` |
 | **RAG** | Pemrosesan dokumen (txt, md, docx, pdf), chunking, vector store SQLite, sumber di jawaban | `rag/` |
 | **Server lokal** | Endpoint OpenAI-compatible di HP (`/v1/chat/completions`, `/v1/models`, `/v1/embeddings`, `/health`), API key, SSE | `server/` |
 | **Copilot** | Saran patch config (diff, terima/tolak), eval sebelum/sesudah, cek konsistensi tokenizer | `copilot/` |

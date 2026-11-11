@@ -102,6 +102,9 @@ internal object ProjectBridge {
                 "localModels" -> reply(scope, result) { localModels(app) }
                 "activateLocalModel" -> reply(scope, result) { activateLocalModel(app, str(a, "path")) }
                 "deleteLocalModel" -> reply(scope, result) { deleteLocalModel(app, str(a, "path")) }
+                "renameLocalModel" -> reply(scope, result) { renameLocalModel(app, str(a, "path"), str(a, "name")) }
+                "verifyLocalModel" -> reply(scope, result) { verifyLocalModel(app, str(a, "path")) }
+                "exportLocalModelMetadata" -> reply(scope, result) { exportLocalModelMetadata(app, str(a, "path")) }
                 "deviceHealth" -> reply(scope, result) { deviceHealth(app, (a["modelSize"] as? Number)?.toLong() ?: 0L) }
                 "serverState" -> reply(scope, result) { serverState(app) }
                 "saveServer" -> reply(scope, result) { saveServer(app, (a["port"] as? Number)?.toInt() ?: 8080, str(a, "apiKey")) }
@@ -117,6 +120,7 @@ internal object ProjectBridge {
                 "hfDownload" -> reply(scope, result) { hfDownload(app, str(a, "repo"), str(a, "file")) }
                 "hfStartDownload" -> reply(scope, result) { hfStartDownload(app, str(a, "repo"), str(a, "file")) }
                 "hfDownloadState" -> reply(scope, result) { hfDownloadState(app, str(a, "id")) }
+                "hfDownloadHistory" -> reply(scope, result) { HfDownloadWorker.history(app) }
                 "hfPauseDownload" -> reply(scope, result) { hfPauseDownload(app, str(a, "id")) }
                 "hfResumeDownload" -> reply(scope, result) { hfResumeDownload(app, str(a, "id")) }
                 "hfCancelDownload" -> reply(scope, result) { hfCancelDownload(app, str(a, "id")) }
@@ -233,6 +237,8 @@ internal object ProjectBridge {
                     "path" to file.absolutePath,
                     "size" to file.length(),
                     "sha256" to runCatching { HfClient().sha256(file) }.getOrDefault(""),
+                    "modified" to file.lastModified(),
+                    "ramRecommended" to (file.length() * 1.25).toLong(),
                     "active" to (file.absolutePath == active),
                 )
             }.toList()
@@ -249,6 +255,39 @@ internal object ProjectBridge {
         require(file.absolutePath != active) { "Nonaktifkan model sebelum menghapusnya" }
         check(file.delete()) { "Model gagal dihapus" }
         return mapOf("ok" to true, "path" to file.absolutePath)
+    }
+
+    private fun modelFile(ctx: Context, path: String): File {
+        val file = File(path).canonicalFile
+        val root = modelDir(ctx).canonicalFile
+        require(file.isFile && file.extension.equals("gguf", true) && (file.path == root.path || file.path.startsWith(root.path + File.separator))) {
+            "Model harus berada di penyimpanan NeuroN dan berformat .gguf"
+        }
+        return file
+    }
+
+    private fun renameLocalModel(ctx: Context, path: String, rawName: String): Map<String, Any> {
+        val file = modelFile(ctx, path)
+        val name = rawName.trim().replace(Regex("[^A-Za-z0-9._-]"), "_").removeSuffix(".gguf") + ".gguf"
+        require(name.length > 5 && name != ".gguf") { "Nama model tidak valid" }
+        val target = File(file.parentFile, name)
+        require(!target.exists()) { "Nama model sudah digunakan" }
+        check(file.renameTo(target)) { "Model gagal di-rename" }
+        val p = ProjectStore.load(ctx)
+        if (p.files.modelPath == file.absolutePath) ProjectStore.save(ctx, p.copy(files = p.files.copy(modelPath = target.absolutePath)))
+        return mapOf("ok" to true, "path" to target.absolutePath, "name" to target.name)
+    }
+
+    private fun verifyLocalModel(ctx: Context, path: String): Map<String, Any> {
+        val file = modelFile(ctx, path)
+        val sha = HfClient().sha256(file)
+        return mapOf("ok" to true, "valid" to true, "size" to file.length(), "sha256" to sha, "path" to file.absolutePath)
+    }
+
+    private fun exportLocalModelMetadata(ctx: Context, path: String): Map<String, Any> {
+        val file = modelFile(ctx, path)
+        val sha = HfClient().sha256(file)
+        return mapOf("name" to file.name, "path" to file.absolutePath, "size" to file.length(), "sha256" to sha, "modified" to file.lastModified(), "format" to "GGUF")
     }
 
     private fun deviceHealth(ctx: Context, modelSize: Long): Map<String, Any> {
@@ -376,6 +415,8 @@ internal object ProjectBridge {
             "count" to p.getInt(HfDownloadWorker.KEY_COUNT, 0),
             "done" to p.getLong(HfDownloadWorker.KEY_DONE, 0L),
             "total" to p.getLong(HfDownloadWorker.KEY_TOTAL, -1L),
+            "speed" to p.getLong(HfDownloadWorker.KEY_SPEED, 0L),
+            "eta" to p.getLong(HfDownloadWorker.KEY_ETA, -1L),
             "path" to (out.getString(HfDownloadWorker.KEY_OUT) ?: ""),
             "modelPath" to (out.getString(HfDownloadWorker.KEY_MODEL) ?: ""),
             "error" to (out.getString(HfDownloadWorker.KEY_ERROR) ?: ""),

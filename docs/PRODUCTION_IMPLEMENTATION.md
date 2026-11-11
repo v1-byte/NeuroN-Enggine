@@ -10,9 +10,9 @@ Dokumen ini mencatat bagian dari `docs/CATATAN_PRODUCTION_1-18.txt` yang sudah d
 - **Review production:** `.github/CODEOWNERS` ditambahkan untuk perubahan Flutter, engine, model, Python, dan workflow. Branch protection tetap harus diaktifkan pada pengaturan repository oleh maintainer.
 - **Secret storage:** API key dan token yang digunakan aplikasi tetap disimpan melalui `SecretStore` berbasis Android Keystore. Token tidak ditulis ke `project.json`.
 - **Device Health Check:** modul model menyediakan snapshot RAM total/bebas, storage bebas, CPU core, ABI, SDK, low-memory state, rekomendasi ukuran model, serta peringatan sebelum model besar dimuat.
-- **Model Library safeguards:** daftar model lokal menampilkan ukuran dan SHA-256. Model nonaktif dapat dihapus setelah konfirmasi pengguna; model aktif ditolak untuk dihapus agar tidak membuat konfigurasi rusak.
+- **Model Library:** daftar model lokal menampilkan ukuran, SHA-256, waktu perubahan, dan estimasi RAM. Tersedia `Pakai`, `Rename`, `Verifikasi SHA-256`, `Lihat metadata`, dan `Hapus`; model aktif ditolak untuk dihapus agar konfigurasi tidak rusak.
 - **Download model:** WorkManager tetap digunakan untuk job background, resume byte, retry jaringan, progress, cancel, pemeriksaan ruang, dan verifikasi SHA-256 dari Hugging Face bila tersedia.
-- **Download controls:** request download disimpan secara lokal sehingga unduhan aktif dapat dijeda dan dilanjutkan kembali; UI menampilkan filter ukuran dan quantization GGUF.
+- **Download Manager:** request download dan riwayat 30 pekerjaan disimpan lokal. UI menampilkan queued/running/paused/succeeded/failed, byte progress, speed, ETA, retry WorkManager, pause/resume/cancel, serta filter ukuran dan quantization GGUF.
 - **Staged release:** `.github/workflows/staged-release.yml` menyediakan gate manual `dev`, `beta`, dan `stable` dengan pemeriksaan dokumentasi serta laporan artefak.
 - **UI:** halaman Hardware sekarang menampilkan health check; halaman Model lokal menampilkan checksum dan aksi `Pakai`/`Hapus`.
 
