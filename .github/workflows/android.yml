@@ -18,6 +18,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Check whitespace
+        run: git diff --check
+      - name: Scan repository for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -43,6 +49,8 @@ jobs:
         run: flutter test
       - name: Kotlin unit tests and server compile
         run: ./gradlew testDebugUnitTest :server:compileDebugKotlin --no-daemon
+      - name: Android lint
+        run: ./gradlew lintDebug --no-daemon
       - name: Debug APK
         working-directory: flutter_app
         run: flutter build apk --debug
@@ -59,6 +67,20 @@ jobs:
         with:
           name: NeuroN-Engine-release-smoke
           path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
+      - name: Verify release APK checksum and size
+        working-directory: flutter_app
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-release.apk
+          test -s "$apk"
+          sha256sum "$apk" | tee "$apk.sha256"
+          bytes=$(stat -c '%s' "$apk")
+          test "$bytes" -lt 150000000
+          echo "Release APK size: $bytes bytes"
+      - name: Verify manifest safety settings
+        run: |
+          grep -q 'android:usesCleartextTraffic="false"' flutter_app/android/app/src/main/AndroidManifest.xml
+          grep -q 'android.permission.INTERNET' flutter_app/android/app/src/main/AndroidManifest.xml
 
   python-api:
     name: Python API smoke tests

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'bridge.dart';
@@ -34,6 +35,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
   String? _downloadId;
   Timer? _downloadPoll;
   Map<String, dynamic> _downloadState = const {};
+  Map<String, dynamic> _health = const {};
   List<Map<String, dynamic>> _copilotChanges = [];
   final Set<String> _reviewedCopilotPaths = {};
 
@@ -43,6 +45,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
     if (widget.page == 'Server') _loadServer();
     if (widget.page == 'Data & RAG') _loadRag();
     if (widget.page == 'Model lokal') _loadLocalModels();
+    if (widget.page == 'Hardware') _loadHealth();
   }
 
   @override
@@ -104,6 +107,36 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
     } catch (e) {
       if (mounted) setState(() => _status = 'Model lokal belum dapat dimuat: $e');
     }
+  }
+
+  Future<void> _loadHealth({int modelSize = 0}) async {
+    try {
+      final health = await Bridge.deviceHealth(modelSize: modelSize);
+      if (mounted) setState(() => _health = health);
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Health check belum dapat diakses: $e');
+    }
+  }
+
+  Future<void> _deleteLocalModel(String path) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Hapus model?'),
+            content: const Text('File model akan dihapus dari penyimpanan NeuroN dan tidak dapat dipulihkan.'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Batal')),
+              FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Hapus')),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed) return;
+    await _run(() async {
+      await Bridge.deleteLocalModel(path);
+      await _loadLocalModels();
+      setState(() => _status = 'Model dihapus dengan aman.');
+    });
   }
 
   Future<void> _activateLocalModel(String path) async => _run(() async {
@@ -257,7 +290,7 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
       'Hugging Face' => _hfPage(),
       'Latih' => TrainingPage(onLog: widget.onLog),
       'Copilot' => _copilotPage(),
-      'Hardware' => _pendingPage(Icons.memory_outlined, 'Hardware', 'Konfigurasi saat ini bisa diubah melalui hardware/engine.json. Editor hardware terstruktur dan pemeriksaan kompatibilitas perangkat belum tersedia.'),
+      'Hardware' => _hardwarePage(),
       _ => _pendingPage(Icons.info_outline, widget.page, 'Fitur ini belum memiliki layar aktif.'),
       },
     ]);
@@ -291,13 +324,59 @@ class _FeatureWorkspaceState extends State<FeatureWorkspace> {
           contentPadding: const EdgeInsets.symmetric(horizontal: 10),
           leading: Icon(model['active'] == true ? Icons.check_circle : Icons.memory_outlined, color: model['active'] == true ? Colors.greenAccent : purple),
           title: Text('${model['name']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
-          subtitle: Text('${_bytes(model['size'])} · ${model['active'] == true ? 'aktif' : 'tersedia'}', style: const TextStyle(fontSize: 10, color: muted)),
-          trailing: model['active'] == true ? const Text('AKTIF', style: TextStyle(fontSize: 9, color: Colors.greenAccent, fontWeight: FontWeight.bold)) : TextButton(onPressed: _busy ? null : () => _activateLocalModel('${model['path']}'), child: const Text('Pakai')),
+          subtitle: Text('${_bytes(model['size'])} · ${model['active'] == true ? 'aktif' : 'tersedia'}\nSHA-256: ${_shortHash(model['sha256'])}', style: const TextStyle(fontSize: 10, color: muted)),
+          trailing: model['active'] == true
+              ? const Text('AKTIF', style: TextStyle(fontSize: 9, color: Colors.greenAccent, fontWeight: FontWeight.bold))
+              : PopupMenuButton<String>(
+                  onSelected: (action) => action == 'use'
+                      ? _activateLocalModel('${model['path']}')
+                      : _deleteLocalModel('${model['path']}'),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'use', child: Text('Pakai')),
+                    PopupMenuItem(value: 'delete', child: Text('Hapus')),
+                  ],
+                ),
         )),
       ],
       const SizedBox(height: 8), const Text('Inferensi memerlukan libneuron_llama.so untuk ABI perangkat. Model besar membutuhkan ruang penyimpanan dan RAM yang cukup.', style: TextStyle(fontSize: 11, color: muted)),
     ])), _message(),
   ]);
+
+  Widget _hardwarePage() {
+    final warnings = ((_health['warnings'] as List?) ?? const []).map((e) => e.toString()).toList();
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      _card('Device Health Check', 'Periksa RAM, storage, ABI, dan kondisi perangkat sebelum memuat model besar.', icon: Icons.health_and_safety_outlined, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          _metric('RAM bebas', _bytes(_health['availableRam'])),
+          _metric('Storage bebas', _bytes(_health['freeStorage'])),
+          _metric('CPU', '${_health['cpuCores'] ?? '-'} core'),
+          _metric('Android', 'SDK ${_health['sdk'] ?? '-'}'),
+        ]),
+        const SizedBox(height: 10),
+        Text('ABI: ${_health['abi'] ?? 'memuat…'}', style: const TextStyle(fontSize: 11, color: muted)),
+        Text('Rekomendasi ukuran model: ${_bytes(_health['recommendedMaxModel'])}', style: const TextStyle(fontSize: 11, color: muted)),
+        if (warnings.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          for (final warning in warnings) Padding(padding: const EdgeInsets.only(bottom: 4), child: Text('⚠ $warning', style: const TextStyle(color: Colors.orangeAccent, fontSize: 11))),
+        ] else if (_health.isNotEmpty) const Text('Perangkat tampak siap untuk pemeriksaan model dasar.', style: TextStyle(color: Colors.greenAccent, fontSize: 11)),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(onPressed: _busy ? null : () => _loadHealth(), icon: const Icon(Icons.refresh), label: const Text('Periksa ulang')),
+      ])),
+      _message(),
+    ];
+  }
+
+  Widget _metric(String label, String value) => Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(color: panel2, borderRadius: BorderRadius.circular(9)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(color: muted, fontSize: 10)), const SizedBox(height: 3), Text(value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12))]),
+      );
+
+  String _shortHash(dynamic value) {
+    final hash = value?.toString() ?? '';
+    if (hash.isEmpty) return 'belum tersedia';
+    return '${hash.substring(0, math.min(16, hash.length))}…';
+  }
 
   Widget _serverPage() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
     _card('Server OpenAI-compatible', 'Mengekspos API HTTP pada interface jaringan aktif. Server tidak dienkripsi; mulai hanya pada jaringan tepercaya.', icon: Icons.dns_outlined, child: Column(children: [

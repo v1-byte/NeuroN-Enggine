@@ -1,0 +1,7 @@
+# Review wajib untuk perubahan production.
+* @v1-byte
+/flutter_app/ @v1-byte
+/engine/ @v1-byte
+/model/ @v1-byte
+/.github/ @v1-byte
+/python/ @v1-byte

@@ -126,6 +126,13 @@ class Bridge {
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
+  static Future<void> deleteLocalModel(String path) async {
+    await _project.invokeMethod<dynamic>('deleteLocalModel', {'path': path});
+  }
+  static Future<Map<String, dynamic>> deviceHealth({int modelSize = 0}) async =>
+      Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>(
+              'deviceHealth', {'modelSize': modelSize}) ??
+          const {});
   static Future<Map<String, dynamic>> activateLocalModel(String path) async =>
       Map<String, dynamic>.from(await _project.invokeMapMethod<String, dynamic>(
               'activateLocalModel', {'path': path}) ??

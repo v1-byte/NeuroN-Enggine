@@ -5,6 +5,7 @@ import com.neuron.model.AiProject
 import com.neuron.model.EngineMode
 import com.neuron.model.SecretStore
 import com.neuron.model.validate
+import com.neuron.model.DeviceHealth
 import com.neuron.engine.EngineHub
 import com.neuron.engine.LlamaCppEngine
 import com.neuron.project.ProjectRepository
@@ -100,6 +101,8 @@ internal object ProjectBridge {
                 "setLocalModel" -> reply(scope, result) { setLocalModel(app, str(a, "path")) }
                 "localModels" -> reply(scope, result) { localModels(app) }
                 "activateLocalModel" -> reply(scope, result) { activateLocalModel(app, str(a, "path")) }
+                "deleteLocalModel" -> reply(scope, result) { deleteLocalModel(app, str(a, "path")) }
+                "deviceHealth" -> reply(scope, result) { deviceHealth(app, (a["modelSize"] as? Number)?.toLong() ?: 0L) }
                 "serverState" -> reply(scope, result) { serverState(app) }
                 "saveServer" -> reply(scope, result) { saveServer(app, (a["port"] as? Number)?.toInt() ?: 8080, str(a, "apiKey")) }
                 "generateServerKey" -> reply(scope, result) { generateServerKey() }
@@ -227,9 +230,39 @@ internal object ProjectBridge {
                     "name" to file.name,
                     "path" to file.absolutePath,
                     "size" to file.length(),
+                    "sha256" to runCatching { HfClient().sha256(file) }.getOrDefault(""),
                     "active" to (file.absolutePath == active),
                 )
             }.toList()
+    }
+
+    private fun deleteLocalModel(ctx: Context, path: String): Map<String, Any> {
+        val file = File(path).canonicalFile
+        val root = modelDir(ctx).canonicalFile
+        require(file.isFile && file.extension.equals("gguf", true) &&
+            (file.path == root.path || file.path.startsWith(root.path + File.separator))) {
+            "Model harus berada di penyimpanan NeuroN dan berformat .gguf"
+        }
+        val active = ProjectStore.load(ctx).files.modelPath
+        require(file.absolutePath != active) { "Nonaktifkan model sebelum menghapusnya" }
+        check(file.delete()) { "Model gagal dihapus" }
+        return mapOf("ok" to true, "path" to file.absolutePath)
+    }
+
+    private fun deviceHealth(ctx: Context, modelSize: Long): Map<String, Any> {
+        val health = DeviceHealth.inspect(ctx, modelSize)
+        return mapOf(
+            "totalRam" to health.totalRamBytes,
+            "availableRam" to health.availableRamBytes,
+            "freeStorage" to health.freeStorageBytes,
+            "cpuCores" to health.cpuCores,
+            "abi" to health.abi,
+            "sdk" to health.sdk,
+            "lowRamDevice" to health.lowRamDevice,
+            "modelSize" to health.modelSizeBytes,
+            "recommendedMaxModel" to health.recommendedMaxModelBytes,
+            "warnings" to health.warnings,
+        )
     }
 
     private fun activateLocalModel(ctx: Context, path: String): Map<String, Any> {

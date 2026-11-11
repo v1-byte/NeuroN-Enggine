@@ -6,7 +6,7 @@
 
 **NeuroN Engine** adalah engine AI lokal untuk Android. Aplikasi ini menjalankan model GGUF di perangkat (llama.cpp), atau memakai API OpenAI-compatible, lalu menyediakan konfigurasi model, RAG, server lokal OpenAI-compatible, copilot untuk memperbaiki konfigurasi, dan pelatihan LoRA lewat server Python.
 
-> **Status: alpha (v0.2.8).** UI Flutter memakai shell mobile-first Beranda/Chat/Library/Import/Lainnya, preset tema, animasi navigasi, dan Tutorial NeuroN. Import Center dapat mengambil GGUF dari Download/internal storage atau Hugging Face; daftar repo memakai accordion, file besar memakai segmented download hingga delapan koneksi, dan model tersimpan dapat dipilih ulang. Auto-update mengecek GitHub Releases dan membuka installer Android setelah konfirmasi. APK produksi tetap wajib ditandatangani dengan keystore privat. Lihat [Status fitur](#status-fitur), [ringkasan perubahan UI](docs/UI_REFRESH.md), dan [docs/RELEASE.md](docs/RELEASE.md).
+> **Status: alpha hardening (v0.2.8).** Selain shell Flutter, engine lokal/API, RAG, Hugging Face, dan training remote, repository sekarang memiliki gate CI untuk test/lint/secret/checksum, CODEOWNERS, Device Health Check, checksum Model Library, serta penghapusan model dengan konfirmasi. Fitur belum diuji pada semua perangkat dan belum boleh disebut production-ready sebelum staged release, signing, dan uji perangkat nyata. Lihat [Status fitur](#status-fitur), [implementasi production](docs/PRODUCTION_IMPLEMENTATION.md), [catatan production](docs/CATATAN_PRODUCTION_1-18.txt), dan [docs/RELEASE.md](docs/RELEASE.md).
 
 ---
 
@@ -46,6 +46,7 @@
 | **Copilot** | Saran patch config (diff, terima/tolak), eval sebelum/sesudah, cek konsistensi tokenizer | `copilot/` |
 | **Pelatihan** | Dataset (jsonl/csv/json), LoRA/QLoRA remote, pemilihan model lokal/GGUF, upload model ke trainer | `train/`, `python/` |
 | **Server pelatih** | FastAPI: upload dataset, SFT/LoRA/QLoRA/DPO, konversi GGUF, quantize, merge, inspeksi | `python/` |
+| **Production hardening** | CI test/lint/secret/checksum, CODEOWNERS, Device Health Check, checksum dan delete safeguard model | `.github/`, `model/`, `flutter_app/` |
 
 Aturan utama: **semua pemanggilan AI lewat `InferenceEngine`.** UI, server, RAG, dan copilot tidak tahu engine mana yang dipakai.
 
@@ -152,7 +153,7 @@ Legenda: **Ada** = tersedia di UI; **Terhubung (dasar)** = memanggil modul namun
 | Tema, ikon, tutorial, animasi | `flutter_app/lib/theme.dart`, `tutorial.dart` | **Ada** | Lima preset warna, tutorial interaktif, dan transisi navigasi |
 | Auto-update APK | `UpdateBridge.kt` | **Ada** | Cek GitHub Releases, tampilkan ukuran, unduh asset APK, lalu buka installer Android setelah konfirmasi |
 | Latih ON_DEVICE | `train` | Belum | Binary finetune llama.cpp belum ada di repo |
-| Hardware (`hardware/engine.json`) | `model`, `engine` | **Nilai tetap** | Tombol simpan belum menyimpan |
+| Hardware (`hardware/engine.json`) | `model`, `engine` | **Terhubung** | Device Health Check menampilkan RAM, storage, ABI, SDK, CPU, low-memory, dan rekomendasi ukuran model; konfigurasi lanjutan tetap lewat editor |
 | Fitur (`features/features.json`) | `model` | **Switch saja** | Vision, TTS, STT belum ada |
 | Vision, TTS, STT | `engine` | Belum | TTS Android dan STT (RecognizerIntent) pernah ditulis di UI Compose lama |
 | Eval | `copilot` | Belum | |
@@ -313,7 +314,7 @@ python3 scripts/make_brand_assets.py --src /path/ke/logo-sumber.png
 ## Batasan dan hal yang belum siap
 
 **Belum siap dinyatakan production-ready.** Berikut daftar batasan yang diketahui:
-1. **Build APK dan uji Android belum diverifikasi** dalam lingkungan audit ini. Periksa job CI, tes Kotlin/Gradle, signing release, lalu uji perangkat nyata sebelum publikasi.
+1. **Build APK dan uji Android perlu diverifikasi pada setiap perubahan.** CI kini menjalankan test/lint/secret scan/checksum, tetapi signing release dan uji perangkat nyata tetap wajib sebelum publikasi.
 2. **UI Flutter sebagian sudah terhubung**, termasuk chat/API, Hugging Face, RAG, Copilot dasar, Server lokal, dan alur training remote tahap awal. Training on-device dan beberapa kontrol lanjut masih belum tersedia; rincian ada di [docs/MIGRASI_FLUTTER.md](docs/MIGRASI_FLUTTER.md).
 3. **Inferensi lokal mensyaratkan native library** llama.cpp yang dibangun untuk ABI perangkat. Pemilihan GGUF saja belum menjamin `.so` tersedia atau model bisa dimuat.
 4. **Template chat Jinja bebas** (`model/chat_template.jinja`) belum didukung. Model dengan template khusus jatuh ke ChatML tanpa pesan jelas.
@@ -372,6 +373,7 @@ Urutan pengerjaan historis ada di [docs/ROADMAP.md](docs/ROADMAP.md). Status fit
 | Tools, guardrails, vision, suara | [docs/TOOLS_GUARDRAILS.md](docs/TOOLS_GUARDRAILS.md), [docs/VISION_VOICE.md](docs/VISION_VOICE.md) |
 | Batas hardware, celah engine | [docs/LIMITS.md](docs/LIMITS.md), [docs/ENGINE_GAPS.md](docs/ENGINE_GAPS.md) |
 | Rilis, signing, uji RAM | [docs/RELEASE.md](docs/RELEASE.md) |
+| Production hardening dan health check | [docs/PRODUCTION_IMPLEMENTATION.md](docs/PRODUCTION_IMPLEMENTATION.md), [docs/CATATAN_PRODUCTION_1-18.txt](docs/CATATAN_PRODUCTION_1-18.txt) |
 | Panduan Flutter | [flutter_app/README.md](flutter_app/README.md) |
 | Server pelatih Python | [python/README.md](python/README.md) |
 
