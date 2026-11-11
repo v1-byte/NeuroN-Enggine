@@ -1,0 +1,503 @@
+CATATAN PRODUCTION NEURON ENGINE
+Catatan profesional dan kesiapan production nomor 2 sampai 18
+
+Tanggal: 2026-11-11
+Repository: https://github.com/v1-byte/NeuroN-Enggine
+Versi terakhir saat catatan dibuat: v0.2.8
+
+============================================================
+PRIORITAS KRITIS
+============================================================
+
+2. TAMBAHKAN AUTOMATED TESTING WAJIB
+
+Sebelum setiap release, workflow GitHub Actions harus menjalankan pemeriksaan otomatis berikut:
+
+- flutter analyze
+- flutter test
+- Kotlin unit test
+- Gradle compile
+- Android lint
+- pemeriksaan dependency yang rentan
+- pemeriksaan secret menggunakan Gitleaks atau alat sejenis
+- pemeriksaan format dan whitespace dengan git diff --check
+- verifikasi checksum APK
+- verifikasi tanda tangan APK
+- pemeriksaan ukuran APK agar tidak tiba-tiba membesar
+- pemeriksaan manifest permission
+- pemeriksaan minimum SDK dan target SDK
+
+Release harus gagal otomatis jika pemeriksaan penting gagal.
+
+Tambahkan branch protection pada main:
+- Pull request wajib untuk perubahan production.
+- Minimal satu pemeriksaan CI harus berhasil.
+- Hindari push langsung ke main.
+- Gunakan CODEOWNERS untuk bagian Android, Flutter, dan keamanan.
+
+3. GUNAKAN STAGED RELEASE
+
+Jangan langsung mengirim semua perubahan ke pengguna production. Gunakan beberapa channel release:
+
+- dev: untuk pengembangan harian.
+- beta: untuk pengujian terbatas.
+- stable: untuk pengguna umum.
+
+Alur yang disarankan:
+
+Pull Request -> Dev build -> Beta testing -> Stable release
+
+Sebelum stable release:
+- Gunakan minimal 5 sampai 10 tester beta.
+- Uji beberapa versi Android.
+- Uji perangkat RAM rendah dan tinggi.
+- Uji jaringan lambat dan jaringan yang terputus.
+- Uji instalasi baru dan update dari versi lama.
+- Catat crash dan masalah UX.
+- Sediakan rollback jika release bermasalah.
+
+============================================================
+STABILITAS APLIKASI
+============================================================
+
+4. TAMBAHKAN CRASH REPORTING
+
+Gunakan Crashlytics, Sentry, atau sistem crash reporting privat untuk mengetahui penyebab aplikasi berhenti.
+
+Data teknis yang boleh dicatat:
+- Versi Android.
+- Model dan manufacturer perangkat.
+- Versi aplikasi.
+- Halaman yang sedang dibuka.
+- Operasi terakhir yang dijalankan.
+- Error download.
+- Status WorkManager.
+- Penggunaan RAM.
+- Ruang penyimpanan.
+- Ukuran model.
+- ABI CPU.
+
+Jangan pernah mengirim data berikut ke crash reporting:
+- Token Hugging Face.
+- API key.
+- Isi chat.
+- Dataset pribadi.
+- File model pribadi.
+- Password.
+- Data identitas pengguna.
+
+Tambahkan tombol untuk menonaktifkan pengiriman laporan crash jika diperlukan.
+
+5. BUAT SISTEM DOWNLOAD YANG DAPAT DILANJUTKAN
+
+Download model besar harus tetap aman jika aplikasi ditutup, perangkat restart, jaringan putus, atau pengguna berpindah halaman.
+
+Fitur yang disarankan:
+- Resume setelah aplikasi ditutup.
+- Daftar download aktif.
+- Retry otomatis dengan exponential backoff.
+- Estimasi waktu tersisa.
+- Kecepatan download.
+- Ruang penyimpanan yang tersedia.
+- Validasi checksum.
+- Tombol pause.
+- Tombol resume.
+- Tombol batal.
+- Tombol hapus file download gagal.
+- Notifikasi yang dapat dibuka kembali ke halaman download.
+- Status queued, downloading, paused, completed, failed, dan cancelled.
+- Penyimpanan state download secara persisten.
+
+Download paralel harus memiliki batas aman. Delapan koneksi tidak selalu lebih cepat dan dapat membuat server membatasi koneksi.
+
+Sediakan pengaturan:
+- Hemat data: 1 koneksi.
+- Normal: 4 koneksi.
+- Cepat: 8 koneksi.
+
+Kecepatan aktual tetap dipengaruhi bandwidth pengguna, CDN Hugging Face, kualitas jaringan, dan batas server. Faktor 30 kali tidak dapat dijamin untuk semua kondisi.
+
+6. LINDUNGI APLIKASI DARI KEHABISAN RAM
+
+Model GGUF besar dapat membuat Android menutup aplikasi jika RAM tidak mencukupi. Tambahkan pemeriksaan sebelum model diaktifkan.
+
+Periksa:
+- RAM total.
+- RAM tersedia.
+- Ukuran model.
+- Ruang penyimpanan kosong.
+- Estimasi context size.
+- Jumlah thread.
+- Jenis quantization.
+- Kemampuan CPU.
+- Dukungan GPU.
+- Dukungan NNAPI jika digunakan.
+- ABI perangkat.
+
+Tampilkan peringatan yang jelas, contoh:
+
+"Model ini berukuran 8 GB, sedangkan RAM bebas perangkat hanya 3,2 GB. Model mungkin gagal dimuat atau aplikasi dapat ditutup Android."
+
+Sediakan rekomendasi:
+- Pilih model quantization lebih kecil.
+- Kurangi context size.
+- Tutup aplikasi lain.
+- Gunakan model Q4 untuk perangkat RAM terbatas.
+- Gunakan Q5 atau Q8 hanya jika perangkat mendukung.
+
+============================================================
+UI DAN UX PROFESIONAL
+============================================================
+
+7. BUAT HALAMAN HUGGING FACE SEPERTI FILE MANAGER
+
+Struktur halaman model yang lebih jelas:
+
+Cari model
+-> Filter GGUF, ukuran, download, dan terbaru
+-> Kartu repository
+   - Nama repository.
+   - Author.
+   - Deskripsi singkat.
+   - Jumlah download.
+   - Jumlah likes.
+   - Ukuran total.
+   - Status sudah diunduh atau belum.
+   - Tombol Buka.
+-> Daftar file GGUF
+   - Nama file.
+   - Quantization.
+   - Ukuran.
+   - RAM rekomendasi.
+   - Status checksum.
+   - Tombol Unduh.
+
+Tambahkan pencarian langsung di dalam daftar file agar pengguna tidak perlu scroll terlalu panjang.
+
+Tampilkan label yang mudah dipahami, misalnya:
+- Q4_K_M - ringan dan cocok untuk banyak perangkat.
+- Q5_K_M - kualitas lebih baik, membutuhkan lebih banyak RAM.
+- Q8_0 - kualitas tinggi, file lebih besar.
+- F16 - sangat besar dan membutuhkan perangkat kuat.
+
+8. GUNAKAN BOTTOM SHEET ATAU HALAMAN DETAIL UNTUK PEMILIHAN MODEL
+
+Pada layar kecil, daftar file yang terlalu panjang dalam satu halaman sulit digunakan. Saat pengguna menekan repository:
+
+- Buka bottom sheet atau halaman detail.
+- Tampilkan daftar file di area scroll khusus.
+- Pastikan halaman dapat discroll dari posisi file yang dipilih.
+- Tombol download tetap terlihat di bagian bawah.
+- Tampilkan detail file sebelum download.
+- Tampilkan peringatan ruang penyimpanan dan RAM.
+- Sediakan tombol kembali yang jelas.
+
+Accordion tetap dapat digunakan, tetapi harus memiliki area scroll yang benar dan tidak menghalangi gesture pengguna.
+
+9. TAMBAHKAN FILTER MODEL
+
+Filter yang disarankan:
+
+- Ukuran kurang dari 1 GB.
+- Ukuran 1 sampai 3 GB.
+- Ukuran 3 sampai 8 GB.
+- Ukuran lebih dari 8 GB.
+- Quantization Q4_K_M.
+- Quantization Q5_K_M.
+- Quantization Q8_0.
+- F16.
+- Model chat.
+- Model coding.
+- Model reasoning.
+- Model yang sudah diunduh.
+- Model yang sedang aktif.
+- Model yang sesuai dengan RAM perangkat.
+- Model paling banyak diunduh.
+- Model terbaru.
+
+Filter harus mudah dihapus menggunakan tombol Reset filter.
+
+10. SEDIAKAN ONBOARDING YANG NYATA
+
+Saat pertama kali membuka aplikasi, tampilkan wizard singkat:
+
+Langkah 1: Pilih mode API atau Lokal.
+Langkah 2: Cek perangkat.
+Langkah 3: Lihat RAM, storage, ABI, dan status native engine.
+Langkah 4: Pilih model yang direkomendasikan.
+Langkah 5: Tampilkan peringatan ukuran model.
+Langkah 6: Jalankan test chat sederhana.
+Langkah 7: Tampilkan tutorial singkat.
+
+Onboarding harus dapat dilewati dan dapat dibuka kembali melalui menu Bantuan atau Tutorial.
+
+============================================================
+KEAMANAN
+============================================================
+
+11. SIMPAN SECRET DENGAN BENAR
+
+Pastikan:
+- Token Hugging Face disimpan menggunakan Android Keystore atau EncryptedSharedPreferences.
+- API key tidak tampil di log.
+- API key memiliki tombol tampil/sembunyikan.
+- Tersedia tombol hapus token.
+- File model tidak dibuka ke aplikasi lain tanpa izin pengguna.
+- Server lokal default dalam keadaan mati.
+- Server lokal default hanya bind ke 127.0.0.1.
+- Akses jaringan lokal membutuhkan konfirmasi.
+- Semua koneksi keluar menggunakan HTTPS.
+- Error message tidak mengandung token atau credential.
+- Token tidak dikirim ke crash reporting.
+- Token tidak ikut dalam backup tanpa enkripsi.
+
+Jika server lokal dapat diakses dari jaringan, tampilkan peringatan keamanan yang jelas dan gunakan API key acak.
+
+12. JANGAN OTOMATIS MENGINSTAL APK TANPA KONTROL PENGGUNA
+
+Auto-update sebaiknya melakukan langkah berikut:
+
+- Mengecek versi terbaru.
+- Menampilkan changelog.
+- Menampilkan ukuran APK.
+- Memeriksa checksum.
+- Memverifikasi signature jika tersedia.
+- Meminta konfirmasi pengguna.
+- Membuka installer Android resmi.
+
+Jangan melakukan instalasi diam-diam.
+
+Jika update gagal:
+- Tampilkan alasan yang jelas.
+- Sediakan tombol Coba lagi.
+- Jangan menghapus APK versi lama.
+- Jangan menghapus konfigurasi pengguna.
+- Pastikan pengguna dapat kembali ke versi sebelumnya jika diperlukan.
+
+============================================================
+RELEASE DAN DISTRIBUSI
+============================================================
+
+13. GUNAKAN VERSIONING YANG KONSISTEN
+
+Gunakan Semantic Versioning:
+
+0.3.0 = fitur besar.
+0.2.9 = fitur kecil.
+0.2.8.1 = bugfix darurat.
+
+Setiap release harus memiliki:
+- APK universal atau APK berdasarkan ABI.
+- Checksum SHA-256.
+- Changelog.
+- Known issues.
+- Minimum Android version.
+- Ukuran APK.
+- Tanggal rilis.
+- Link commit source.
+- Status tanda tangan APK.
+- Catatan migrasi dari versi sebelumnya.
+
+Jangan menggunakan nomor versi yang berbeda antara pubspec, README, Git tag, dan GitHub Release.
+
+14. TAMBAHKAN APK BERDASARKAN ABI
+
+APK universal mudah digunakan, tetapi ukurannya lebih besar. Untuk production, pertimbangkan menyediakan:
+
+- Universal APK untuk pengguna umum.
+- arm64-v8a untuk mayoritas HP modern.
+- armeabi-v7a untuk perangkat lama.
+- x86_64 jika diperlukan.
+
+Tampilkan rekomendasi download berdasarkan arsitektur perangkat. Jika pengguna tidak memahami ABI, sediakan pilihan Universal sebagai pilihan aman.
+
+Sebelum release, verifikasi setiap APK:
+- Dapat diinstal.
+- Dapat dibuka.
+- Native library tersedia untuk ABI yang sesuai.
+- Signature valid.
+- Ukuran masuk akal.
+- Checksum tersedia.
+
+15. PISAHKAN MODEL DARI APK
+
+Jangan memasukkan model besar ke dalam APK. Model sebaiknya selalu:
+
+- Diunduh terpisah.
+- Disimpan di folder model.
+- Dapat dipindahkan.
+- Dapat dihapus.
+- Dapat diimpor dari Download.
+- Memiliki metadata.
+- Memiliki checksum.
+- Memiliki status aktif.
+- Memiliki lokasi file.
+- Memiliki tanggal download.
+- Memiliki tanggal terakhir digunakan.
+
+APK harus tetap ringan dan proses update tidak boleh menghapus model pengguna.
+
+============================================================
+FITUR PRODUK YANG DISARANKAN
+============================================================
+
+16. BUAT MODEL LIBRARY
+
+Buat halaman khusus Model Library yang berisi:
+
+- Model aktif.
+- Model tersedia.
+- Nama model.
+- Ukuran.
+- Lokasi file.
+- Checksum.
+- Tanggal download.
+- Tanggal terakhir digunakan.
+- Quantization.
+- Rekomendasi RAM.
+- Tombol Pakai.
+- Tombol Hapus.
+- Tombol Rename.
+- Tombol Verifikasi.
+- Tombol Ekspor metadata.
+- Tombol Buka lokasi file jika diizinkan Android.
+
+Tambahkan konfirmasi sebelum menghapus model besar.
+
+17. TAMBAHKAN DEVICE HEALTH CHECK
+
+Tampilkan informasi perangkat:
+
+- Versi Android.
+- RAM total.
+- RAM tersedia.
+- Storage total.
+- Storage bebas.
+- CPU ABI.
+- CPU core.
+- GPU dan API jika tersedia.
+- Native engine.
+- Izin notifikasi.
+- Status internet.
+- Status WorkManager.
+- Status foreground service.
+
+Berikan rekomendasi otomatis, contoh:
+
+"Perangkat cocok untuk model hingga 3B dengan quantization Q4. Model 7B mungkin membutuhkan RAM tambahan."
+
+"Ruang kosong tidak cukup untuk model yang dipilih. Hapus file atau pilih model yang lebih kecil."
+
+18. TAMBAHKAN MODE OFFLINE YANG JELAS
+
+Pengguna harus selalu tahu engine yang sedang digunakan. Tampilkan indikator:
+
+- Online.
+- Offline.
+- Model lokal aktif.
+- API engine aktif.
+- Download tertunda.
+- Download berjalan.
+- Training berjalan.
+- Server lokal aktif.
+- Server lokal berhenti.
+
+Saat chat berjalan, tampilkan sumber engine secara jelas:
+
+"Lokal · nama_model.gguf"
+atau
+"API · nama_model · endpoint"
+
+Jika koneksi internet terputus, jangan hanya menampilkan error teknis. Berikan pilihan:
+- Coba lagi.
+- Beralih ke model lokal.
+- Buka pengaturan koneksi.
+- Simpan pesan untuk dikirim nanti.
+
+============================================================
+ROADMAP YANG DISARANKAN
+============================================================
+
+VERSI 0.2.9 - STABILITAS
+
+- Crash reporting.
+- Retry download.
+- Resume download.
+- Pemeriksaan RAM dan storage.
+- Logging aman.
+- Filter file model.
+- Perbaikan navigasi.
+- Status download persisten.
+- Perbaikan notifikasi.
+- Pengujian perangkat RAM rendah.
+
+VERSI 0.3.0 - PRODUCTION BETA
+
+- Model Library.
+- Device Health Check.
+- Onboarding.
+- Staged beta release.
+- Backup dan restore.
+- Test coverage yang lebih lengkap.
+- APK berdasarkan ABI.
+- Release notes otomatis.
+- Changelog di dalam aplikasi.
+
+VERSI 0.4.0 - PRODUK MATANG
+
+- Manajemen beberapa model.
+- Rekomendasi model otomatis.
+- Pause dan resume download.
+- Training job history.
+- RAG manager.
+- Export dan import workspace.
+- Performance dashboard.
+- Model benchmark.
+- Dukungan plugin atau integrasi lanjutan.
+
+============================================================
+CHECKLIST SEBELUM PRODUCTION
+============================================================
+
+[ ] Token GitHub lama sudah di-revoke.
+[ ] Tidak ada token di repository.
+[ ] Secret scan berhasil.
+[ ] Flutter analyze berhasil.
+[ ] Flutter test berhasil.
+[ ] Kotlin test berhasil.
+[ ] Gradle build berhasil.
+[ ] Android lint berhasil.
+[ ] APK signature berhasil diverifikasi.
+[ ] Checksum sudah dipublikasikan.
+[ ] Crash reporting sudah diuji.
+[ ] Download resume sudah diuji.
+[ ] Download retry sudah diuji.
+[ ] Download jaringan lambat sudah diuji.
+[ ] Download saat aplikasi ditutup sudah diuji.
+[ ] Model checksum sudah diuji.
+[ ] Model besar dengan RAM rendah sudah diuji.
+[ ] Import file dari Download sudah diuji.
+[ ] Model dapat dihapus dengan aman.
+[ ] Tema tetap tersimpan setelah restart.
+[ ] Auto-update sudah diuji.
+[ ] Server lokal default mati.
+[ ] API key tidak masuk log.
+[ ] Onboarding sudah diuji pengguna baru.
+[ ] Release notes lengkap.
+[ ] Known issues ditulis.
+[ ] Rollback release tersedia.
+[ ] Beta tester sudah mencoba APK.
+
+KESIMPULAN
+
+Sebelum menambah banyak fitur baru, fokus utama harus diberikan pada:
+
+1. Keamanan token dan secret.
+2. Stabilitas download model.
+3. Pemeriksaan RAM dan storage.
+4. Crash reporting.
+5. Automated testing.
+6. UX pemilihan model.
+7. Release dan update yang aman.
+
+Jika tujuh area tersebut sudah stabil, NeuroN Engine akan terasa lebih profesional, aman, dan siap digunakan oleh pengguna umum.
