@@ -160,7 +160,7 @@ void main() {
       await tester.enterText(find.widgetWithText(TextField, 'Model 2'), 'model.gguf');
       await tester.tap(_filled('Gabung · simpan sebagai model baru'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('bukan file GGUF'), findsOneWidget);
+      expect(find.text('Gabung model memakai bobot penuh (safetensors), bukan file GGUF. Isi id repo Hugging Face atau nama folder model di server.'), findsOneWidget);
       expect(calls.where((c) => c.method == 'runModelPipeline'), isEmpty);
     });
 

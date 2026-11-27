@@ -109,6 +109,7 @@ void main() {
     expect(calls.any((c) => c.method == 'loraAttach'), isTrue);
     expect(find.text('Lepas adapter'), findsOneWidget);
 
+    await t.ensureVisible(find.text('Lepas adapter'));
     await t.tap(find.text('Lepas adapter'));
     await t.pumpAndSettle();
     expect(calls.any((c) => c.method == 'loraDetach'), isTrue);
