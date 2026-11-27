@@ -1,0 +1,105 @@
+name: Android verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      ORG_GRADLE_PROJECT_withNative: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Check whitespace
+        run: git diff --check
+      - name: Check version consistency
+        run: |
+          v=$(grep '^version:' flutter_app/pubspec.yaml | sed 's/version: *//; s/+.*//')
+          grep -q "kAppVersion = '$v'" flutter_app/lib/app_info.dart
+          grep -q "## \[$v\]" CHANGELOG.md
+      - name: Scan repository for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.24.5'
+          cache: true
+      - name: Install Android SDK components
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.0.12077973 cmake;3.22.1'
+      - name: Flutter dependencies
+        working-directory: flutter_app
+        run: flutter pub get
+      - name: Flutter analyze
+        working-directory: flutter_app
+        run: flutter analyze
+      - name: Flutter tests
+        working-directory: flutter_app
+        run: flutter test
+      - name: Kotlin unit tests
+        run: ./gradlew testDebugUnitTest --no-daemon
+      - name: Android lint
+        run: ./gradlew lintDebug --no-daemon
+      - name: Debug APK
+        working-directory: flutter_app
+        run: flutter build apk --debug
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NeuroN-Engine-debug
+          path: flutter_app/build/app/outputs/flutter-apk/app-debug.apk
+      - name: Release APK smoke build
+        working-directory: flutter_app
+        run: flutter build apk --release
+      - name: Upload release smoke APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NeuroN-Engine-release-smoke
+          path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
+      - name: Verify release APK checksum and size
+        working-directory: flutter_app
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-release.apk
+          test -s "$apk"
+          sha256sum "$apk" | tee "$apk.sha256"
+          bytes=$(stat -c '%s' "$apk")
+          test "$bytes" -lt 150000000
+          echo "Release APK size: $bytes bytes"
+      - name: Verify manifest safety settings
+        run: |
+          grep -q 'android:usesCleartextTraffic="false"' flutter_app/android/app/src/main/AndroidManifest.xml
+          grep -q 'android.permission.INTERNET' flutter_app/android/app/src/main/AndroidManifest.xml
+
+  python-api:
+    name: Python API smoke tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: python/requirements-test.txt
+      - name: Install lightweight API test dependencies
+        run: python -m pip install -r python/requirements-test.txt
+      - name: Run Python API smoke tests with real dependencies
+        run: python python/tests/smoke_server.py

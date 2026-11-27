@@ -1,0 +1,40 @@
+# --- Kotlin / Gradle (modul library di root) ---
+*.iml
+.gradle/
+build/
+local.properties
+.idea/
+.cxx/
+.kotlin/
+*.apk
+*.aab
+
+# --- Model & data besar (jangan di-commit) ---
+*.gguf
+*.safetensors
+*.onnx
+python/data/
+
+# --- Rahasia (jangan di-commit) ---
+*.jks
+*.keystore
+key.properties
+.env
+
+# --- Python (python/) ---
+.venv/
+__pycache__/
+*.pyc
+
+# --- Flutter (flutter_app/) ---
+# Aturan tambahan ada di flutter_app/.gitignore
+flutter_app/.dart_tool/
+flutter_app/.pub-cache/
+flutter_app/.flutter-plugins
+flutter_app/.flutter-plugins-dependencies
+flutter_app/build/
+flutter_app/android/.gradle/
+flutter_app/android/local.properties
+flutter_app/android/key.properties
+
+.DS_Store

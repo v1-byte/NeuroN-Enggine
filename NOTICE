@@ -1,0 +1,9 @@
+NeuroN Engine
+Copyright 2026 Frostbyte Technologies
+
+Produk ini memuat perangkat lunak yang dikembangkan oleh Frostbyte Technologies.
+
+Komponen pihak ketiga tidak termasuk dalam lisensi ini dan tetap memakai lisensinya masing-masing,
+antara lain llama.cpp (MIT, di-clone terpisah lewat scripts/setup_native.sh) serta paket Flutter,
+Kotlin, dan Python yang tercantum di pubspec.yaml, berkas Gradle, dan python/requirements.txt.
+Model (mis. Froged N1 / Qwen2.5) mengikuti lisensi di repository Hugging Face masing-masing.

@@ -1,0 +1,361 @@
+# NeuroN Engine
+
+<p align="center">
+  <img src="branding/neuron_logo.png" alt="Logo NeuroN Engine" width="320">
+</p>
+
+**NeuroN Engine** adalah engine AI lokal untuk Android. Aplikasi ini hanya menjalankan model GGUF di perangkat (llama.cpp), tanpa API atau model online, lalu menyediakan konfigurasi model, RAG OpenAI-compatible, copilot untuk memperbaiki konfigurasi, dan pelatihan LoRA lewat server Python.
+
+> **Status: alpha hardening (v0.3.9).** Selain shell Flutter, engine lokal, RAG, Hugging Face, dan training remote, repository sekarang memiliki gate CI untuk test/lint/secret/checksum, CODEOWNERS, Device Health Check, checksum Model Library, penghapusan model dengan konfirmasi, pause/resume download, filter ukuran/quantization, dan gate staged release dev/beta/stable. Fitur belum diuji pada semua perangkat dan belum boleh disebut production-ready sebelum signing, beta sign-off, dan uji perangkat nyata. Lihat [Status fitur](#status-fitur), [implementasi production](docs/PRODUCTION_IMPLEMENTATION.md), [catatan production](docs/CATATAN_PRODUCTION_1-18.txt), dan [docs/RELEASE.md](docs/RELEASE.md).
+
+---
+
+## Daftar isi
+
+1. [Ringkasan](#ringkasan)
+2. [Migrasi ke Flutter (2026-11-09)](#migrasi-ke-flutter-2026-11-09)
+3. [Arsitektur](#arsitektur)
+4. [Struktur repo](#struktur-repo)
+5. [Status fitur](#status-fitur)
+6. [Konfigurasi project: 7 bagian](#konfigurasi-project-7-bagian)
+7. [Memulai: prasyarat](#memulai-prasyarat)
+8. [Menjalankan UI Flutter](#menjalankan-ui-flutter)
+9. [Modul Kotlin dan engine lokal](#modul-kotlin-dan-engine-lokal)
+10. [Server pelatih Python](#server-pelatih-python)
+11. [Aset logo dan ikon](#aset-logo-dan-ikon)
+13. [Keamanan](#keamanan)
+14. [Batasan dan hal yang belum siap](#batasan-dan-hal-yang-belum-siap)
+15. [Roadmap](#roadmap)
+16. [Verifikasi](#verifikasi)
+17. [Dokumentasi](#dokumentasi)
+18. [Lisensi](#lisensi)
+
+---
+
+## Ringkasan
+
+| Area | Yang disediakan | Lokasi |
+|---|---|---|
+| **UI Android** | Beranda, Chat, Library, Import Center, Activity, Workspace editor, Model Library metadata/verify/rename, Download Manager, tema, tutorial, animasi | `flutter_app/` (Flutter) |
+| **Konfigurasi** | 7 bagian config dalam satu file project: parameter chat, file model, tokenizer, pengetahuan tambahan, pelatihan ulang, hardware, fitur | `model/`, `project/` |
+| **Engine** | Antarmuka `InferenceEngine` dengan satu implementasi: llama.cpp lokal (JNI) | `engine/` |
+| **Hugging Face** | Download Manager: resume/pause, retry, speed/ETA, riwayat status, WorkManager, verifikasi SHA-256, filter ukuran/quantization, token gated | `hf/`, `flutter_app/` |
+| **RAG** | Pemrosesan dokumen (txt, md, docx, pdf), chunking, vector store SQLite, sumber di jawaban | `rag/` |
+| **Copilot** | Saran patch config (diff, terima/tolak), eval sebelum/sesudah, cek konsistensi tokenizer | `copilot/` |
+| **Pelatihan** | Dataset (jsonl/csv/json), LoRA/QLoRA remote, pemilihan model lokal/GGUF, upload model ke trainer | `train/`, `python/` |
+| **Server pelatih** | FastAPI: upload dataset, SFT/LoRA/QLoRA/DPO, konversi GGUF, quantize, merge, inspeksi. Di APK: Lainnya → Ubah bobot (kuantisasi, tanam LoRA, gabung model) | `python/`, `flutter_app/` |
+| **Production hardening** | CI test/lint/secret/checksum, CODEOWNERS, Device Health Check, checksum dan delete safeguard model | `.github/`, `model/`, `flutter_app/` |
+
+Aturan utama: **semua pemanggilan AI lewat `InferenceEngine`.** UI, RAG, dan copilot tidak tahu engine mana yang dipakai.
+
+### Unduhan model AI
+
+Model ringan **Froged N1 (Qwen2.5 0.5B)** tersedia melalui [repository Hugging Face](https://huggingface.co/bytecode66/Froged_N1), atau [unduh file GGUF Q4_K_M langsung](https://huggingface.co/bytecode66/Froged_N1/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf?download=true). Model ini juga sudah ditambahkan ke katalog **Model Hub** di aplikasi. Lihat [panduan Model Hub](docs/MODEL_HUB.md) untuk alur unduh dan aktivasi.
+
+---
+
+## Migrasi ke Flutter (2026-11-09)
+
+UI Android sebelumnya ditulis dengan Jetpack Compose di modul `app/`. Sejak 2026-11-09 UI ditulis ulang di **Flutter** di folder `flutter_app/`.
+
+- **Entry point APK** sekarang proyek Flutter. Modul `app/` Compose dihapus. Modul itu sudah tidak punya layar UI sejak sebelum migrasi.
+- **Modul Kotlin library** (`model`, `project`, `hf`, `engine`, `rag`, `train`, `copilot`) dan **`python/`** tidak berubah.
+- **Identitas seragam:** applicationId `com.neuron.engine`, nama aplikasi "NeuroN Engine", versi `0.3.9+20`.
+- **Logo** dikompres dari 415 KB menjadi sekitar 73 KB total dan dipakai sebagai header serta ikon launcher adaptif.
+- **Flutter** tersambung ke project dan modul Kotlin untuk chat dengan mode lokal (JNI llama.cpp arm64), RAG, Hugging Face, Copilot, dan training remote tahap awal. Training remote belum diuji melalui build/perangkat; ON_DEVICE belum tersedia sebagai alur Flutter.
+
+Rincian lengkap (peta layar lama → Flutter, perubahan Gradle, risiko, dan langkah berikutnya) ada di [docs/MIGRASI_FLUTTER.md](docs/MIGRASI_FLUTTER.md).
+
+---
+
+## Arsitektur
+
+```
+flutter_app/  UI Flutter (entry point APK com.neuron.engine)
+   │
+   │  MethodChannel/EventChannel ke Kotlin untuk project, chat, RAG, dan HF
+   ▼
+modul Kotlin (root Gradle; dipakai sebagai library oleh APK Flutter)
+   ├─ model    data class config, validasi, SecretStore
+   ├─ project  AiProject ↔ file virtual (VirtualTree), simpan/muat project.json
+   ├─ engine   InferenceEngine ─┬─ LlamaCppEngine (JNI llama.cpp, GGUF)
+   ├─ rag      Chunker, FileParser, vector store, RagPipeline (embedding lewat engine)
+   ├─ hf       unduh model Hugging Face (WorkManager, resume, SHA-256)
+   ├─ train    Dataset, Trainer { REMOTE | ON_DEVICE }, ModelOpsClient
+   └─ copilot  saran patch config, Eval, cek konsistensi tokenizer
+
+python/  NeuroN Trainer (FastAPI) di PC/server. Dipanggil dari APK lewat HTTP.
+         Python TIDAK berjalan di dalam APK (PyTorch/PEFT tidak tersedia di Android).
+```
+
+Alur data: file project (7 bagian) → `VirtualTree` memvalidasi dan membaca/menulis → modul terkait. Parameter generate dihitung oleh `engine/ModelDefaults.kt` dengan prioritas `chat/params.json` yang sudah diubah → `model/Modelfile` → `model/generation_config.json` → bawaan.
+
+---
+
+## Struktur repo
+
+```
+NeuroNEngine/
+├─ README.md                    dokumen ini
+├─ branding/
+│  └─ neuron_logo.png           logo penuh (640 px, dikompres); tidak masuk APK
+├─ flutter_app/                 UI Android (Flutter)
+│  ├─ lib/main.dart             shell mobile-first, state chat/Workspace, bridge actions
+│  ├─ lib/feature_workspace.dart layar model lokal, RAG, HF, dan fitur tertunda
+│  ├─ assets/images/            neuron_mark.png (mark "NE" untuk header; masuk APK)
+│  ├─ android/                  host Android: manifest, ikon adaptif, Gradle modul :app
+│  ├─ design/                   mockup ilustratif UI v0.2
+│  ├─ pubspec.yaml              nama neuron_engine, versi 0.3.9+20
+│  └─ README.md                 panduan khusus Flutter
+├─ model/       data class config (AiProject, ChatParams, ModelFiles, ...), validasi, SecretStore
+├─ project/     simpan/muat project.json, VirtualTree (path file ↔ config), ExplorerSections
+├─ engine/      InferenceEngine: LlamaCppEngine (JNI), hanya mesin lokal
+│               + ModelDefaults, ToolEngine, Guardrails, EngineHub, EngineFactory
+├─ rag/         Chunker, FileParser (txt/md/docx/pdf), vector store SQLite/memory, RagPipeline
+├─ hf/          cari & unduh model Hugging Face (WorkManager, resume, SHA-256)
+├─ train/       Dataset, Trainer (REMOTE / ON_DEVICE), ModelOpsClient
+├─ copilot/     saran perbaikan config (diff + terima/tolak), Eval, cek konsistensi
+├─ python/      NeuroN Trainer (FastAPI): training, konversi GGUF, operasi model
+├─ docs/        roadmap, status, arsitektur, panduan per fitur, catatan migrasi
+├─ LICENSE, NOTICE              Apache License 2.0 dan pemberitahuan hak cipta
+├─ scripts/
+│  ├─ setup_native.sh         menyiapkan llama.cpp (submodule atau clone; `--tag`, `--vulkan`); aman dijalankan berulang
+│  └─ make_brand_assets.py    membuat ulang logo, mark, dan ikon launcher dari logo sumber
+├─ build.gradle.kts, settings.gradle.kts, gradle.properties
+├─ gradlew, gradlew.bat, gradle/wrapper/   Gradle 8.10.2 untuk modul Kotlin library
+└─ .gitignore
+```
+
+---
+
+## Status fitur
+
+Legenda: **Ada** = tersedia di UI; **Terhubung (dasar)** = memanggil modul namun perlu verifikasi perangkat; **Belum** = alur UI belum dibuat ulang.
+
+| Area | Kode (modul) | UI Flutter saat ini | Catatan |
+|---|---|---|---|
+| Editor JSON (`params.json`, `config.json`) | `project` | **Ada** (dua file tetap) | Nomor baris, cari dan ganti, Rapikan, status JSON valid |
+| Inspektur parameter | `model` | **Ada** | Slider temperature, top-p, top-k, max tokens; seed |
+| Muat / simpan file JSON | — | **Ada** | Lewat file picker sistem, belum dari project |
+| Editor GGUF (metadata model) | `engine` (`GgufMeta`), `flutter_app/` | **Terhubung (dasar)** | Pilih model dari daftar atau file `.gguf` dari HP (disalin dulu ke penyimpanan NeuroN, model aktif tidak berubah); tombol Edit dari Library dan Model lokal; hasil disimpan sebagai salinan baru |
+| Isi dari model lokal (Workspace) | `flutter_app/lib/model_profile_fill.dart` | **Terhubung (dasar)** | Tombol di toolbar mengisi `config.json`, `chat_template.jinja`, `quantization.json`, dan `contextLength` dari header GGUF model aktif; belum tersimpan sampai Simpan ditekan |
+| Undo / redo, tombol Rapikan JSON | — | **Ada** | Riwayat per berkas (`edit_history.dart`); perubahan dari luar editor (Rapikan, Ganti semua, Inspektur, Isi dari model) ikut masuk riwayat. Highlight sintaks JSON belum ada |
+| Tab file, buat/hapus file, Explorer | `project` (`VirtualTree`) | Belum | Editor kode Kotlin lama sudah punya tab dan auto-indent, belum dibuat ulang |
+| Chat | `engine` | **Terhubung** | Streaming LOCAL (llama.cpp) via `EngineHub`; RAG memberi konteks bila indeks aktif |
+| Log | — | **Ada** (teks sederhana) | Diagnostik RAM/ABI belum ada |
+| Copilot (saran, diff, terima/tolak) | `copilot` | **Terhubung (dasar)** | Saran patch dan tinjau-lalu-terapkan dari editor; file terlarang tetap diblokir. Belum diuji di perangkat |
+| Engine llama.cpp lokal | `engine` (JNI, `neuron_llama.cpp`) | **Terhubung bersyarat** | Pemilihan GGUF aktif; perlu `libneuron_llama.so` untuk ABI perangkat |
+| Tool calling, guardrails | `engine` (`ToolEngine`, `Guardrails`) | Toggle tool calling dan editor kata/regex | Berbasis prompt, belum format `tool_calls` OpenAI |
+| Privasi per model | `model` (`PrivacyPolicy`), `ProjectBridge`, `flutter_app/lib/privacy_dialog.dart` | **Terhubung (dasar)** | Lainnya → Fitur → "Edit privasi model": ambil `privacy.json` dari repo asal, edit, simpan per model, opsional digabung ke guardrail model aktif. Skema belum dikunci pemilik model; lihat [docs/PRIVACY.md](docs/PRIVACY.md) |
+| Hugging Face | `hf` | **Terhubung** | Cari repo GGUF, tampilkan ukuran file, unduh dengan progress/resume/checksum, dan aktifkan model otomatis |
+| RAG (pengetahuan tambahan) | `rag` | **Terhubung (dasar)** | Impor dokumen, indeks SQLite, retrieval saat chat; embeddings bergantung pada engine |
+| Dataset (import, validasi, split) | `train` | **Sebagian** | Layar Latih dapat mengimpor dan memvalidasi JSONL/JSON/CSV. `Dataset.split` (deterministik, seed) sudah ada di modul Kotlin tetapi belum punya kontrol di UI Flutter |
+| Latih LoRA (REMOTE) | `train` + `python/` | **Terhubung dasar** | LoRA/QLoRA, job/progres, stop/sambung, ZIP/LoRA GGUF, serta upload model GGUF lokal ke trainer |
+| Tema, ikon, tutorial, animasi | `flutter_app/lib/theme.dart`, `tutorial.dart` | **Ada** | Lima preset warna, tutorial interaktif, dan transisi navigasi |
+| Auto-update APK | `UpdateBridge.kt` | **Ada** | Cek GitHub Releases, tampilkan ukuran, unduh asset APK, lalu buka installer Android setelah konfirmasi |
+| Latih ON_DEVICE | `train` | Belum | Binary finetune llama.cpp belum ada di repo |
+| Hardware (`hardware/engine.json`) | `model`, `engine` | **Terhubung** | Device Health Check menampilkan RAM, storage, ABI, SDK, CPU, low-memory, dan rekomendasi ukuran model; konfigurasi lanjutan tetap lewat editor |
+| Fitur (`features/features.json`) | `model` | **Switch saja** | Vision, TTS, STT belum ada |
+| Vision, TTS, STT | `engine` | Belum | TTS Android dan STT (RecognizerIntent) pernah ditulis di UI Compose lama |
+| Eval (sebelum/sesudah) | `copilot` | Belum | Logika ada di modul; belum ada layar Flutter |
+| Konversi format (AWQ/GPTQ/ONNX) | `python/convert_check.py` | Belum | Pemeriksaan sumber sudah ada, konversi belum |
+
+Detail per fase ada di [docs/STATUS.md](docs/STATUS.md). Peta fitur ke file dan modul ada di [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md).
+
+---
+
+## Konfigurasi project: 7 bagian
+
+Setiap bagian dibaca dan ditulis lewat `VirtualTree.read` / `VirtualTree.write`. `write` memvalidasi isi sebelum disimpan.
+
+| Bagian | File project | Engine lokal (llama.cpp) |
+|---|---|---|
+| **1. Parameter Chat** | `chat/params.json`, `chat/system_prompt.md` | Semua parameter |
+| **2. File Model** | `model/Modelfile`, `quantization.json`, `chat_template.jinja`, `config.json`, `generation_config.json`, `lora.json`, `ops.json` | Modelfile dan generation_config dibaca `ModelDefaults`. Hanya GGUF yang dijalankan (format lain ditolak dengan petunjuk konversi). Chat template dipakai; Jinja bebas jatuh ke ChatML. `config.json` hanya dibaca Copilot |
+| **3. Tokenizer** | `tokenizer/tokenizer.json`, `tokenizer/vocab.json` | `special.eos` menjadi stop sequence. `vocab.json` hanya data project, tidak tersambung ke tokenizer GGUF |
+| **4. Pengetahuan Tambahan** | `knowledge/rag.json` | Embedding lewat model GGUF terpisah |
+| **5. Pelatihan Ulang** | `training/train.json`, `model/lora.json` | Adapter LoRA GGUF dimuat. Training ON_DEVICE masih kerangka |
+| **6. Mesin / Hardware** | `hardware/engine.json`, `engine/api.json` | GPU layers, threads, batch, KV cache, flash attention, RoPE, logit bias |
+| **7. Fitur** | `features/features.json` | Tools dan guardrails. Vision lokal belum ada |
+
+Modelfile yang dibaca: `SYSTEM` (satu baris atau `"""blok"""`) dan `PARAMETER` temperature, top_p, top_k, min_p, repeat_penalty, presence_penalty, frequency_penalty, num_predict, seed, num_ctx, stop. `FROM`, `TEMPLATE`, dan `ADAPTER` diabaikan.
+
+---
+
+## Memulai: prasyarat
+
+| Untuk | Yang dibutuhkan |
+|---|---|
+| UI Flutter | Flutter stable dengan Dart 3.5+ (Flutter 3.24 atau lebih baru), Android SDK, JDK 17 |
+| Modul Kotlin (library) | JDK 17, Android SDK (compileSdk 35), Gradle lewat wrapper (8.10.2) |
+| Engine llama.cpp lokal | Android NDK dan CMake 3.22+, HP **arm64 asli** (emulator x86 tidak didukung) |
+| Server pelatih Python | Python 3.10+, GPU NVIDIA disarankan |
+
+Engine lokal memerlukan `minSdk` 26; aplikasi Flutter saat ini disetel ke `minSdk` 26.
+
+---
+
+## Menjalankan UI Flutter
+
+```bash
+cd flutter_app
+flutter pub get
+flutter run                    # emulator atau perangkat Android
+flutter build apk --debug      # hasil: build/app/outputs/flutter-apk/app-debug.apk
+flutter analyze
+```
+
+- Untuk distribusi, ganti nama APK menjadi `NeuroN-Engine-<debug|release>.apk`.
+- Build rilis dan signing dijelaskan di [docs/RELEASE.md](docs/RELEASE.md). Keystore dan `flutter_app/android/key.properties` tidak boleh di-commit.
+- Untuk build hanya arm64: `flutter build apk --release --target-platform android-arm64`.
+
+> `flutter analyze`, `flutter test`, dan `flutter build apk` belum pernah dijalankan untuk proyek ini. Lihat [docs/MIGRASI_FLUTTER.md](docs/MIGRASI_FLUTTER.md) bagian 6.
+
+---
+
+## Modul Kotlin dan engine lokal
+
+Modul Kotlin dibangun dari root repo:
+
+```bash
+# Tes unit (tanpa native)
+./gradlew :engine:testDebugUnitTest :project:testDebugUnitTest :copilot:testDebugUnitTest
+
+
+# Dengan engine lokal (llama.cpp), setelah submodule ditambahkan:
+./scripts/setup_native.sh --tag <tag-rilis>  # mengunci llama.cpp; tambahkan --vulkan untuk GPU (belum diuji)
+./gradlew :engine:assembleDebug -PwithNative
+```
+
+- Modul Kotlin disertakan sebagai library pada build Android Flutter; build dan pengujian APK belum dijalankan di lingkungan ini.
+- Folder `engine/src/main/cpp/llama.cpp` kosong di zip atau clone tanpa `--recurse-submodules`. Jalankan `scripts/setup_native.sh`; skrip ini juga bekerja pada salinan tanpa `.git` (meng-clone langsung). Build dengan `-PwithNative` berhenti lebih awal dengan pesan jelas bila source belum ada.
+- Untuk engine lokal, kunci llama.cpp ke satu tag rilis (`--tag <tag>`). API llama.cpp berubah cepat. Bagian sensitif ada di `engine/src/main/cpp/llama_compat.h`.
+- Build native selalu memakai `-O3`, walau varian Debug. Tanpa itu inferensi sangat lambat.
+- Detail: [docs/NATIVE.md](docs/NATIVE.md) (termasuk Vulkan) dan [docs/ENGINE_GAPS.md](docs/ENGINE_GAPS.md) (kekurangan engine yang sudah diketahui).
+
+---
+
+## Server pelatih Python
+
+Server Python berjalan di PC atau server, tidak di HP. Ia menangani upload dataset, training (SFT, LoRA, QLoRA, DPO), konversi ke GGUF, quantize, merge, dan inspeksi model.
+
+```bash
+cd python
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+NEURON_API_KEY=ganti-dengan-kunci-panjang LLAMA_CPP_DIR=/path/ke/llama.cpp \
+  uvicorn server:app --host 127.0.0.1 --port 8001
+```
+
+- `NEURON_API_KEY` **wajib**. Server menolak berjalan tanpa kunci.
+- `NEURON_DATA` menentukan folder data (default `./data`).
+- Path sumber model dibatasi ke folder models (`hf_repo` / `resolve`).
+- Untuk produksi, ikat Uvicorn ke localhost di belakang reverse proxy TLS. Terapkan batas body, firewall/VPN, rate limiting, kuota/retensi disk, dan monitoring.
+- Smoke test: pasang `python/requirements-test.txt` lalu jalankan `python python/tests/smoke_server.py` dari root; tanpa dependency FastAPI, skrip memakai mode STUB yang tidak menguji HTTP nyata.
+- Backend Python dapat diuji pada LAN via `http://IP_PC:8001`; koneksi HTTP dari APK hanya didukung build debug. Untuk APK release, tempatkan backend di balik reverse proxy TLS dan gunakan URL `https://`. Workflow Flutter Training remote baru dihubungkan dan belum diverifikasi lewat build/perangkat.
+
+Detail: [python/README.md](python/README.md), [docs/TRAINING.md](docs/TRAINING.md), [docs/DATASET.md](docs/DATASET.md), [docs/CONVERT.md](docs/CONVERT.md).
+
+---
+
+## Aset logo dan ikon
+
+| Berkas | Ukuran | Dipakai untuk |
+|---|---|---|
+| `branding/neuron_logo.png` | 20 KB | Dokumentasi (README). Tidak masuk APK |
+| `flutter_app/assets/images/neuron_mark.png` | 5 KB | Header UI (masuk APK) |
+| `flutter_app/android/app/src/main/res/mipmap-*/ic_launcher.png` | ~28 KB | Ikon launcher Android 6–7 |
+| `flutter_app/android/app/src/main/res/mipmap-*/ic_launcher_foreground.png` | ~19 KB | Ikon adaptif Android 8+ (latar putih dari `values/colors.xml`) |
+
+Total sekitar 73 KB, dari 415 KB untuk logo sumber. Untuk membuat ulang aset dari logo sumber asli (PNG transparan, minimal 1024 px):
+
+```bash
+pip install pillow
+python3 scripts/make_brand_assets.py --src /path/ke/logo-sumber.png
+```
+
+> **Catatan logo:** tulisan di logo sumber berbunyi "NeuroN **Enggine**" (salah eja). Logo tidak diubah. Di aplikasi hanya mark "NE" yang dipakai, sehingga tulisan itu tidak tampil. Perbaiki sumber logo sebelum publikasi.
+
+---
+
+## Keamanan
+- **Rahasia.** Token Hugging Face, dan API key trainer disimpan melalui `SecretStore` terenkripsi Android Keystore. Bridge mengosongkan `remoteTrainerApiKey` saat menyimpan project dan memigrasikan nilai lama; jangan menempelkan secret ke issue, log, atau repo.
+- **Keystore rilis** tidak disimpan di repo. Gunakan `flutter_app/android/key.properties` (sudah di `.gitignore`); workflow publikasi mensyaratkan signing secrets/keystore valid dan memeriksa signature APK.
+- **Cleartext outbound.** Android release menetapkan `usesCleartextTraffic=false`; URL API dari APK release harus HTTPS. HTTP hanya diizinkan pada build debug untuk pengujian lokal.
+- **Server Python** menolak start tanpa `NEURON_API_KEY` dan membandingkan kunci dengan perbandingan konstan.
+- **Izin Android** di manifest: `INTERNET`, foreground service, `WAKE_LOCK`, `POST_NOTIFICATIONS`, dan `RECORD_AUDIO` (untuk input suara). Izin `RECORD_AUDIO` belum dipakai UI Flutter.
+- **Copilot** tidak boleh mengubah file terlarang (`engine/api.json`, folder eval, model, training). Patch yang menambah masalah konsistensi `config.json` dengan tokenizer diblokir.
+
+---
+
+## Batasan dan hal yang belum siap
+
+**Belum siap dinyatakan production-ready.** Berikut daftar batasan yang diketahui:
+1. **Build APK dan uji Android perlu diverifikasi pada setiap perubahan.** CI kini menjalankan test/lint/secret scan/checksum, tetapi signing release dan uji perangkat nyata tetap wajib sebelum publikasi.
+2. **UI Flutter sebagian sudah terhubung**, termasuk chat lokal, Hugging Face, RAG, Copilot dasar, dan alur training remote tahap awal. Training on-device dan beberapa kontrol lanjut masih belum tersedia; rincian ada di [docs/MIGRASI_FLUTTER.md](docs/MIGRASI_FLUTTER.md).
+3. **Inferensi lokal mensyaratkan native library** llama.cpp yang dibangun untuk ABI perangkat. Pemilihan GGUF saja belum menjamin `.so` tersedia atau model bisa dimuat.
+4. **Template chat Jinja bebas** (`model/chat_template.jinja`) belum didukung. Template yang tidak dikenali llama.cpp jatuh ke ChatML; engine mengirim peringatan ke UI lewat `EngineWarnings` (dicek saat load), tetapi jawaban model non-ChatML tetap bisa buruk.
+5. **Vision lokal** (mmproj / libmtmd) belum ada. Mode LOCAL menolak gambar.
+6. **Tool calling** masih berbasis prompt (`<tool_call>`).
+7. **ONNX runtime belum terintegrasi.** AWQ/GPTQ/safetensors tidak dapat dijalankan langsung; konversi yang didukung memerlukan backend dan input yang sesuai, bukan workflow Flutter lengkap.
+8. **Trainer ON_DEVICE** memanggil binary `libllamafinetune.so` yang belum ada di repo. Nama flag CLI dan format log belum diverifikasi.
+9. **Workspace/editor masih terbatas** dibanding IDE penuh; beberapa alat file dan konfigurasi belum memiliki alur terstruktur.
+10. **Model besar tidak praktis di HP.** 7B Q4 (sekitar 4–5 GB) hanya pas di HP 8–12 GB dan lambat; 70B tidak mungkin. Untuk model besar gunakan server remote (lihat [docs/LIMITS.md](docs/LIMITS.md)).
+11. **Sampler terbatas** (belum ada GBNF/JSON mode, mirostat, logprobs) dan **embedding lokal lambat** (konteks embedding dibuat ulang tiap panggilan). Lihat [docs/ENGINE_GAPS.md](docs/ENGINE_GAPS.md).
+
+Batas hardware (RAM HP, VRAM server) dijelaskan di [docs/LIMITS.md](docs/LIMITS.md). Matriks uji RAM 6/8/12 GB ada di [docs/RELEASE.md](docs/RELEASE.md).
+
+---
+
+## Roadmap dan status
+Urutan pengerjaan historis ada di [docs/ROADMAP.md](docs/ROADMAP.md). Status fitur terbaru ada di [docs/STATUS.md](docs/STATUS.md) dan matriks [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md). Ringkasannya:
+
+| Fase | Isi | Status |
+|---|---|---|
+| 0–1 | Pondasi, project, engine lokal | Flutter sudah terhubung sebagian; native runtime dan build perangkat perlu verifikasi |
+| 2–5 | Hugging Face, Copilot dasar, RAG | Layar Flutter tersedia; pengujian perangkat dan beberapa fitur lanjutan masih perlu |
+| 6 | Dataset dan training (REMOTE, ON_DEVICE) | Alur Flutter remote tahap awal tersedia; split/validasi serta uji perangkat/server masih perlu; finetune native belum tersedia |
+| 7 | Tools, guardrails, vision, suara, konversi, rilis | Tools/guardrails dasar aktif; vision/voice UI dan beberapa konversi belum tersedia |
+**Prioritas berikutnya:** jalankan CI/Android build, lengkapi uji perangkat dan konfigurasi release, lalu lengkapi split train/val dan uji Training dengan server Python aktual serta batasan jaringan/operasional. Rincian ada di [docs/RELEASE.md](docs/RELEASE.md).
+
+---
+
+## Verifikasi
+
+| Pemeriksaan | Status |
+|---|---|
+| Logo dikompres dan diperiksa secara visual (transparansi, ikon launcher) | Dilakukan |
+| XML Android (manifest, ikon adaptif, `colors.xml`) diparse | Dilakukan |
+| Referensi lama (`:app`, `app/src`, Compose, `neuran`) dicari dan dibersihkan | Dilakukan |
+| `flutter pub get`, `flutter analyze`, `flutter test`, `flutter build apk` | **Belum** (Flutter SDK tidak tersedia di lingkungan migrasi) |
+| `./gradlew :engine:testDebugUnitTest ...` | **Belum** (Gradle, Google Maven, dan Maven Central tidak dapat diakses) |
+| Smoke test Python API dengan FastAPI nyata | **57/57 lulus** (HTTP, auth, upload, validation, job cap/timeout; snapshot 2026-11-10) |
+| `python3 -S python/tests/smoke_server.py` (mode STUB) | **78/78 lulus** (dijalankan ulang 2026-11-27, tanpa FastAPI) |
+| Uji di perangkat | **Belum** |
+
+---
+
+## Dokumentasi
+
+| Topik | File |
+|---|---|
+| Migrasi UI ke Flutter (baca dulu) | [docs/MIGRASI_FLUTTER.md](docs/MIGRASI_FLUTTER.md) |
+| Status per fase | [docs/STATUS.md](docs/STATUS.md), [docs/ROADMAP.md](docs/ROADMAP.md) |
+| Arsitektur dan peta fitur | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md) |
+| Native llama.cpp, Vulkan, model lokal | [docs/NATIVE.md](docs/NATIVE.md), [docs/ON_DEVICE.md](docs/ON_DEVICE.md) |
+| RAG, dataset, training | [docs/RAG.md](docs/RAG.md), [docs/DATASET.md](docs/DATASET.md), [docs/TRAINING.md](docs/TRAINING.md) |
+| Konversi format model | [docs/CONVERT.md](docs/CONVERT.md) |
+| Copilot dan eval | [docs/COPILOT.md](docs/COPILOT.md) |
+| Tools, guardrails, vision, suara | [docs/TOOLS_GUARDRAILS.md](docs/TOOLS_GUARDRAILS.md), [docs/VISION_VOICE.md](docs/VISION_VOICE.md) |
+| Batas hardware, celah engine | [docs/LIMITS.md](docs/LIMITS.md), [docs/ENGINE_GAPS.md](docs/ENGINE_GAPS.md) |
+| Rilis, signing, uji RAM | [docs/RELEASE.md](docs/RELEASE.md) |
+| Production hardening dan health check | [docs/PRODUCTION_IMPLEMENTATION.md](docs/PRODUCTION_IMPLEMENTATION.md), [docs/CATATAN_PRODUCTION_1-18.txt](docs/CATATAN_PRODUCTION_1-18.txt) |
+| Privasi per model (`privacy.json`) | [docs/PRIVACY.md](docs/PRIVACY.md) |
+| Panduan Flutter | [flutter_app/README.md](flutter_app/README.md) |
+| Server pelatih Python | [python/README.md](python/README.md) |
+
+---
+
+## Lisensi
+
+Kode di repo ini berlisensi [Apache License 2.0](LICENSE); pemberitahuan hak cipta ada di [NOTICE](NOTICE). llama.cpp (MIT) tidak ikut dalam repo dan tetap berlisensi sendiri. Model mengikuti lisensi repository Hugging Face masing-masing.

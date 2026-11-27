@@ -1,0 +1,14 @@
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.17
+pydantic==2.10.2
+torch>=2.4
+transformers==4.46.3
+peft==0.13.2
+trl==0.12.1
+datasets==3.1.0
+accelerate==1.1.1
+bitsandbytes>=0.44.1; platform_system == "Linux"
+gguf>=0.10.0
+huggingface_hub>=0.26
+safetensors>=0.4.5
