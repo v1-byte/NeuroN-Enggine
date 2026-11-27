@@ -98,7 +98,8 @@ private class ChatStream(private val ctx: Context) : EventChannel.StreamHandler 
         val p = ProjectStore.load(ctx)
         if (p.files.modelPath.isBlank()) throw EngineException(EngineErrorKind.MODEL, "Belum ada model lokal aktif. Unduh atau impor model GGUF dulu.")
         val raw = EngineHub.ensure(p)
-        return Triple(EngineFactory.wrap(raw, p), ModelDefaults.effective(p), p)
+        val params = ChatResponsePrompt.apply(ModelDefaults.effective(p), p.features.responseMode)
+        return Triple(EngineFactory.wrap(raw, p), params, p)
     }
 
     /**

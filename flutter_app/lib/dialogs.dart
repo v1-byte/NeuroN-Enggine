@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -208,6 +210,15 @@ Future<void> showFeaturesDialog(
                     } catch (_) {}
                   },
                 ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.code, size: 18),
+                  label: const Text('Editor JSON mode chat'),
+                  onPressed: () async {
+                    Navigator.of(ctx).pop();
+                    await showFeaturesJsonDialog(context, log);
+                  },
+                ),
               ],
             ),
           ),
@@ -241,4 +252,153 @@ Future<void> showFeaturesDialog(
     words.dispose();
     regex.dispose();
   });
+}
+
+/// Editor langsung untuk features/features.json; hasil divalidasi dan dipakai proyek/runtime.
+Future<void> showFeaturesJsonDialog(
+  BuildContext context,
+  void Function(String level, String text) log,
+) async {
+  final controller = TextEditingController();
+  String? loadError;
+  try {
+    final raw = await Bridge.read('features/features.json');
+    controller.text = const JsonEncoder.withIndent('  ').convert(jsonDecode(raw));
+  } catch (e) {
+    loadError = e is PlatformException ? (e.message ?? e.code) : '$e';
+  }
+
+  if (!context.mounted) {
+    controller.dispose();
+    return;
+  }
+
+  void snack(BuildContext ctx, String text) {
+    ScaffoldMessenger.of(ctx)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+          content: Text(text), behavior: SnackBarBehavior.floating));
+  }
+
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('JSON fitur & mode chat'),
+      content: SizedBox(
+        width: 520,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (loadError != null) ...[
+                Text('Gagal memuat konfigurasi: $loadError',
+                    style: const TextStyle(color: Colors.orangeAccent)),
+                const SizedBox(height: 8),
+              ],
+              TextField(
+                controller: controller,
+                enabled: loadError == null,
+                minLines: 12,
+                maxLines: 20,
+                keyboardType: TextInputType.multiline,
+                autocorrect: false,
+                enableSuggestions: false,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                decoration: const InputDecoration(
+                  labelText: 'features/features.json',
+                  alignLabelWithHint: true,
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'responseMode menerima "private" atau "open". Private mendorong model agar tidak mengulang rahasia; open mendorong jawaban yang luas. Mode ini hanya instruksi untuk model, bukan enkripsi. Guardrail tetap aktif pada kedua mode, dan open tidak menjamin semua permintaan akan dijawab.',
+                style: TextStyle(color: muted, fontSize: 11, height: 1.4),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Runtime chat Flutter saat ini menerapkan responseMode, tools, dan guardrail. visionEnabled/mmprojPath serta TTS/STT/voiceLanguage masih hanya tersimpan; pengaturan itu belum mengaktifkan fitur vision atau audio di chat Flutter. Berkas ini berbeda dari privacy.json per-model.',
+                style: TextStyle(color: muted, fontSize: 11, height: 1.4),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Batal'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: blue),
+          onPressed: loadError != null
+              ? null
+              : () async {
+                  try {
+                    final decoded = jsonDecode(controller.text);
+                    if (decoded is! Map<String, dynamic>) {
+                      throw const FormatException('Akar JSON harus berupa objek.');
+                    }
+                    const fields = {
+                      'tools',
+                      'visionEnabled',
+                      'mmprojPath',
+                      'ttsEnabled',
+                      'sttEnabled',
+                      'voiceLanguage',
+                      'responseMode',
+                      'guardrailRegex',
+                      'guardrailBlockedWords',
+                    };
+                    final unknown = decoded.keys.where((key) => !fields.contains(key));
+                    if (unknown.isNotEmpty) {
+                      throw FormatException(
+                          'Field tidak dikenal: ${unknown.join(', ')}');
+                    }
+                    final mode = decoded['responseMode'];
+                    if (decoded.containsKey('responseMode') &&
+                        mode != 'private' &&
+                        mode != 'open') {
+                      throw const FormatException('responseMode harus "private" atau "open".');
+                    }
+                    await Bridge.write(
+                      'features/features.json',
+                      const JsonEncoder.withIndent('  ').convert(decoded),
+                    );
+                    final unavailable = <String>[];
+                    final mmprojPath = decoded['mmprojPath'];
+                    if (decoded['visionEnabled'] == true ||
+                        (mmprojPath is String && mmprojPath.trim().isNotEmpty)) {
+                      unavailable.add('vision lokal/mmproj');
+                    }
+                    if (decoded['ttsEnabled'] == true ||
+                        decoded['sttEnabled'] == true) {
+                      unavailable.add('TTS/STT');
+                    }
+                    final saveMessage = unavailable.isEmpty
+                        ? 'JSON disimpan; responseMode dan guardrail diterapkan.'
+                        : 'JSON disimpan, tetapi ${unavailable.join(' dan ')} belum aktif di chat Flutter.';
+                    log('INFO', 'Konfigurasi features/features.json disimpan');
+                    if (ctx.mounted) {
+                      snack(ctx, saveMessage);
+                      Navigator.pop(ctx);
+                    }
+                  } catch (e) {
+                    final message = e is PlatformException
+                        ? (e.message ?? e.code)
+                        : e is FormatException
+                            ? e.message
+                            : '$e';
+                    log('ERROR', 'JSON fitur tidak valid: $message');
+                    if (ctx.mounted) snack(ctx, 'JSON tidak valid: $message');
+                  }
+                },
+          child: const Text('Simpan & terapkan'),
+        ),
+      ],
+    ),
+  );
+
+  controller.dispose();
 }

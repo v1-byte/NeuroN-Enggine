@@ -28,6 +28,21 @@ Berkas privasi ikut terhapus saat model dihapus. Kode: `model/PrivacyPolicy.kt`,
 - `regex`: daftar pola regex (sintaks Kotlin/Java). Pola yang tidak valid dilewati dan dilaporkan sebagai peringatan.
 - Kunci lain boleh ada; kunci berisi `description`, `comment`, `example`, `note`, `metadata`, `schema`, atau `changelog` selalu diabaikan.
 
+## Mode balasan chat (`features/features.json`)
+
+Mode balasan diatur terpisah dari `privacy.json` per-model:
+
+```json
+{
+  "responseMode": "private"
+}
+```
+
+- `private` menambahkan instruksi pada system prompt agar model menghindari pengulangan rahasia.
+- `open` mendorong jawaban yang luas untuk pertanyaan wajar dan aman, tetapi bukan jaminan semua permintaan dijawab.
+- Keduanya hanya instruksi untuk model—bukan enkripsi atau jaminan privasi. Guardrail input/output tetap berjalan secara terpisah.
+- Mode ini hanya mengubah perilaku chat lokal; tidak mengubah penyimpanan riwayat maupun mengaktifkan vision, TTS, atau STT yang belum tersedia di chat Flutter.
+
 ## Status skema: belum dikunci
 
 Skema `privacy.json` milik pemilik model **belum diverifikasi**. Berkas aslinya di Hugging Face tidak diperiksa saat
