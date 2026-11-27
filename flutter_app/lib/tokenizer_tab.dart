@@ -158,7 +158,7 @@ class _TokenizerPanelState extends State<TokenizerPanel> {
               ]),
       ),
       const SizedBox(height: 4),
-      const Text('Hanya baca. Ubah ID token khusus dan template chat di tab \"Metadata & template\".', style: TextStyle(color: muted, fontSize: 11)),
+      const Text('Hanya baca. Ubah ID token khusus dan template chat di tab "Metadata & template".', style: TextStyle(color: muted, fontSize: 11)),
       if (n > 0) ...[
         const SizedBox(height: 14),
         const Text('DAFTAR TOKEN', style: TextStyle(color: muted, fontSize: 9, letterSpacing: 1.1)),
