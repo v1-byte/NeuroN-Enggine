@@ -1,7 +1,14 @@
 package com.neuron.model
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /** 7. Fitur */
+@Serializable
+enum class ChatResponseMode {
+    @SerialName("private") PRIVATE,
+    @SerialName("open") OPEN,
+}
+
 @Serializable
 data class ToolDef(val name: String, val description: String, val parametersJsonSchema: String)
 @Serializable
@@ -12,6 +19,7 @@ data class FeatureConfig(
     val ttsEnabled: Boolean = false,
     val sttEnabled: Boolean = false,
     val voiceLanguage: String = "id",   // BCP-47 untuk TTS & STT, mis. "id-ID" atau "en-US"
+    val responseMode: ChatResponseMode = ChatResponseMode.OPEN,
     val guardrailRegex: List<String> = emptyList(),     // blokir output/input yang cocok
     val guardrailBlockedWords: List<String> = emptyList(),
 )

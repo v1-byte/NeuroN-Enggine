@@ -5,7 +5,11 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/). Versi di `flut
 
 ## [Unreleased]
 
+## [0.3.10] - 2026-11-27
+
 ### Ditambahkan
+- Editor JSON tervalidasi untuk `features/features.json` di pengaturan Fitur; `responseMode` (`private`/`open`) tersimpan pada proyek dan diterapkan ke system prompt setiap chat lokal. Guardrail tetap aktif di kedua mode.
+- Peringatan editor membedakan field yang aktif di runtime Flutter dari field vision/audio yang saat ini hanya tersimpan.
 - Edit model, tab **Tokenizer** (`tokenizer_tab.dart`, `tokenizer_logic.dart`): ringkasan key `tokenizer.*`, pemeriksaan kewajaran (ID di luar vocab, EOS hilang, BPE tanpa merges), teks token khusus, dan penjelajah daftar token per halaman (hanya baca). Pencarian hanya mencakup halaman yang sedang dibuka.
 - Editor kode: **lipat blok** JSON (selama ada blok terlipat tampilan hanya-baca; teks tidak pernah diubah) dan **autocomplete** (kunci `ChatParams`, kata kunci Modelfile/Jinja, kata dari isi berkas). Logika di `editor_assist.dart`.
 - **Tab berkas bertahan** setelah aplikasi ditutup (`tab_session.dart`, SharedPreferences). `engine/api.json` tidak pernah dipulihkan otomatis.
