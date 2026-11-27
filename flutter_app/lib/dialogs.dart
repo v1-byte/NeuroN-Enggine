@@ -263,9 +263,14 @@ Future<void> showFeaturesJsonDialog(
   String? loadError;
   try {
     final raw = await Bridge.read('features/features.json');
-    controller.text = JsonEncoder.withIndent('  ').convert(jsonDecode(raw));
+    controller.text = const JsonEncoder.withIndent('  ').convert(jsonDecode(raw));
   } catch (e) {
     loadError = e is PlatformException ? (e.message ?? e.code) : '$e';
+  }
+
+  if (!context.mounted) {
+    controller.dispose();
+    return;
   }
 
   void snack(BuildContext ctx, String text) {
@@ -359,7 +364,7 @@ Future<void> showFeaturesJsonDialog(
                     }
                     await Bridge.write(
                       'features/features.json',
-                      JsonEncoder.withIndent('  ').convert(decoded),
+                      const JsonEncoder.withIndent('  ').convert(decoded),
                     );
                     final unavailable = <String>[];
                     final mmprojPath = decoded['mmprojPath'];
