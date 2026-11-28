@@ -121,9 +121,12 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
   int _tokCount = 0;
   DateTime? _firstTokenAt;
   DateTime? _lastTokenAt;
+  Timer? _chatRenderTimer;
   String _copilotComplaint = '';
   String _copilotSample = '';
   String _engineStatus = 'Memuat…';
+  List<Map<String, dynamic>> _localModels = [];
+  bool _switchingModel = false;
 
   // Riwayat tampilan dan konteks percakapan disimpan di penyimpanan privat Android.
   final List<ChatLine> _lines = [];
@@ -161,6 +164,7 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _chatSub?.cancel();
+    _chatRenderTimer?.cancel();
     _flushPendingDraft();
     _editor.dispose();
     _chatInput.dispose();
@@ -532,6 +536,12 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
   Future<void> _refreshEngine() async {
     try {
       final e = await Bridge.loadEngine();
+      List<Map<String, dynamic>> models = [];
+      try {
+        models = await Bridge.localModels(hash: false);
+      } catch (_) {
+        // Daftar model dapat dimuat ulang langsung dari tombol pemilih.
+      }
       if (!mounted) return;
       if (e.legacyApi) {
         toast('Konfigurasi API lama ditemukan dan diabaikan. NeuroN hanya memakai model GGUF lokal.');
@@ -539,6 +549,7 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
       }
       setState(() {
         _dashboardEngine = e;
+        _localModels = models;
         _engineStatus = e.modelPath.isEmpty
             ? 'Belum ada model lokal'
             : (e.nativeAvailable
@@ -547,6 +558,75 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
       });
     } catch (e) {
       _log('ERROR', 'Gagal memuat pengaturan engine: $e');
+    }
+  }
+
+  Future<void> _chooseChatModel() async {
+    if (_streaming || _switchingModel) return;
+    List<Map<String, dynamic>> models;
+    try {
+      models = await Bridge.localModels(hash: false);
+    } catch (e) {
+      toast('Daftar model gagal dimuat: $e');
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _localModels = models);
+    if (models.isEmpty) {
+      _openWorkspace('Model Hub');
+      return;
+    }
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: panel,
+      showDragHandle: true,
+      builder: (ctx) {
+        final activePath = _dashboardEngine?.modelPath ?? '';
+        return SafeArea(
+          child: SizedBox(
+            height: MediaQuery.of(ctx).size.height * 0.55,
+            child: Column(children: [
+              const ListTile(
+                leading: Icon(Icons.memory_outlined, color: blue),
+                title: Text('Pilih model untuk chat', style: TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text('Model terpilih dipakai untuk pesan berikutnya.'),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: models.length,
+                  itemBuilder: (ctx, index) {
+                    final model = models[index];
+                    final active = model['path'] == activePath;
+                    return ListTile(
+                      leading: Icon(
+                        active ? Icons.radio_button_checked : Icons.radio_button_off,
+                        color: active ? blue : muted,
+                      ),
+                      title: Text('${model['name'] ?? 'Model GGUF'}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: Text(_formatBytes(model['size']), style: const TextStyle(color: muted, fontSize: 11)),
+                      trailing: active
+                          ? const Chip(label: Text('Dipakai', style: TextStyle(fontSize: 10)))
+                          : null,
+                      onTap: () => Navigator.pop(ctx, model['path']?.toString()),
+                    );
+                  },
+                ),
+              ),
+            ]),
+          ),
+        );
+      },
+    );
+    if (selected == null || !mounted || selected == _dashboardEngine?.modelPath) return;
+    setState(() => _switchingModel = true);
+    try {
+      await Bridge.activateLocalModel(selected);
+      await _refreshEngine();
+      if (mounted) toast('Model chat diganti. Model baru dimuat saat pesan berikutnya dikirim.');
+    } catch (e) {
+      toast('Model tidak bisa dipilih: $e');
+    } finally {
+      if (mounted) setState(() => _switchingModel = false);
     }
   }
 
@@ -677,13 +757,21 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
         final now = DateTime.now();
         _firstTokenAt ??= now;
         _lastTokenAt = now;
-        if (!mounted) return;
-        setState(() => _lines[_lines.length - 1] =
-            ChatLine('assistant', _reply.toString()));
+        _scheduleChatRender();
       },
       onError: (Object e) => _finish(error: e),
       onDone: () => _finish(),
     );
+  }
+
+  /// Batch potongan token agar Flutter tidak membangun ulang Markdown per token.
+  void _scheduleChatRender() {
+    if (!mounted || _chatRenderTimer?.isActive == true) return;
+    _chatRenderTimer = Timer(const Duration(milliseconds: 40), () {
+      _chatRenderTimer = null;
+      if (!mounted || !_streaming || _lines.isEmpty) return;
+      setState(() => _lines[_lines.length - 1] = ChatLine('assistant', _reply.toString()));
+    });
   }
 
   Future<void> _stop() async {
@@ -697,6 +785,8 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
     if (!_streaming) {
       return; // onError dan onDone bisa sama-sama terpanggil; cukup satu kali
     }
+    _chatRenderTimer?.cancel();
+    _chatRenderTimer = null;
     _chatSub = null;
     final partial = _reply.toString();
     final last = _lines.length - 1;
@@ -1245,7 +1335,9 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
                 const Text('Percakapan',
                     style:
                         TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                Text(_engineStatus,
+                Text(_localModels.length > 1
+                        ? '$_engineStatus · ${_localModels.length} model tersimpan'
+                        : _engineStatus,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: muted, fontSize: 10)),
@@ -1255,6 +1347,13 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
               tooltip: 'Atur engine',
               onPressed: _openEngine,
               icon: const Icon(Icons.tune, size: 19),
+            ),
+            IconButton(
+              tooltip: _switchingModel ? 'Mengganti model…' : 'Pilih model untuk chat',
+              onPressed: _streaming || _switchingModel ? null : _chooseChatModel,
+              icon: _switchingModel
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.memory_outlined, size: 19),
             ),
             IconButton(
               tooltip: 'Riwayat percakapan',
