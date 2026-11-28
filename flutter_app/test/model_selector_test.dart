@@ -67,7 +67,9 @@ void main() {
       ),
     ));
 
-    final button = tester.widget<OutlinedButton>(find.byType(OutlinedButton));
+    final button = tester.widget<OutlinedButton>(
+      find.byWidgetPredicate((widget) => widget is OutlinedButton),
+    );
     expect(button.onPressed, isNull);
     expect(find.text('Jawaban sedang berjalan…'), findsOneWidget);
     expect(selected, isFalse);
