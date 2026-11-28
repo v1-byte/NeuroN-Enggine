@@ -18,6 +18,7 @@ import 'conversation_store.dart';
 import 'dialogs.dart';
 import 'edit_history.dart';
 import 'model_profile_fill.dart';
+import 'model_selector.dart';
 import 'errors.dart';
 import 'feature_workspace.dart';
 import 'inspector.dart';
@@ -124,6 +125,8 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
   String _copilotComplaint = '';
   String _copilotSample = '';
   String _engineStatus = 'Memuat…';
+  List<Map<String, dynamic>> _localModels = [];
+  bool _modelBusy = false;
 
   // Riwayat tampilan dan konteks percakapan disimpan di penyimpanan privat Android.
   final List<ChatLine> _lines = [];
@@ -131,6 +134,8 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
   final StringBuffer _reply = StringBuffer();
   Future<void> _chatWriteQueue = Future<void>.value();
   StreamSubscription<dynamic>? _chatSub;
+  Timer? _replyRenderTimer;
+  bool _replyRenderPending = false;
   bool _streaming = false;
   bool _clearingChat = false;
   // Peringatan non-fatal dari engine untuk permintaan chat terakhir (RAG dimatikan, template ChatML, riwayat dipangkas).
@@ -161,6 +166,7 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _chatSub?.cancel();
+    _replyRenderTimer?.cancel();
     _flushPendingDraft();
     _editor.dispose();
     _chatInput.dispose();
@@ -545,8 +551,47 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
                 ? 'Lokal · ${e.modelPath.split('/').last}'
                 : 'Lokal · native belum tersedia');
       });
+      await _refreshLocalModels();
     } catch (e) {
       _log('ERROR', 'Gagal memuat pengaturan engine: $e');
+    }
+  }
+
+  Future<void> _refreshLocalModels() async {
+    try {
+      final models = await Bridge.localModels(hash: false);
+      if (mounted) setState(() => _localModels = models);
+    } catch (e) {
+      _log('WARN', 'Daftar model lokal gagal dimuat: $e');
+    }
+  }
+
+  Future<void> _selectChatModel(String path) async {
+    if (_streaming || _modelBusy) {
+      toast('Tunggu sampai jawaban selesai sebelum mengganti model.');
+      return;
+    }
+    final chosen = _localModels.where((m) => '${m['path'] ?? ''}' == path).toList();
+    final name = chosen.isEmpty ? path.split('/').last : ModelSelector.modelName(chosen.first);
+    setState(() => _modelBusy = true);
+    try {
+      toast('Mengaktifkan $name…');
+      final result = await Bridge.activateLocalModel(path);
+      if (result['nativeAvailable'] == true) {
+        await Bridge.runModel();
+      }
+      await _refreshEngine();
+      await _refreshLocalModels();
+      if (!mounted) return;
+      toast(result['nativeAvailable'] == true
+          ? '$name dipilih untuk Chat. Model dimuat saat pesan dikirim.'
+          : '$name dipilih, tetapi library native llama.cpp belum tersedia.');
+      _log('INFO', 'Model Chat dipilih: $path');
+    } catch (e) {
+      _log('ERROR', 'Aktivasi model Chat gagal: $e');
+      toast('Model tidak bisa diaktifkan: ${friendlyError(e)}');
+    } finally {
+      if (mounted) setState(() => _modelBusy = false);
     }
   }
 
@@ -645,6 +690,9 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
 
   void _submit(String q) {
     if (_streaming || _clearingChat) return;
+    final previous = _chatSub;
+    _chatSub = null;
+    unawaited(previous?.cancel());
     _convo.add({'role': 'user', 'content': q});
     _boundConvo();
     _chatNotices.clear();
@@ -677,9 +725,7 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
         final now = DateTime.now();
         _firstTokenAt ??= now;
         _lastTokenAt = now;
-        if (!mounted) return;
-        setState(() => _lines[_lines.length - 1] =
-            ChatLine('assistant', _reply.toString()));
+        _scheduleReplyRender();
       },
       onError: (Object e) => _finish(error: e),
       onDone: () => _finish(),
@@ -693,13 +739,33 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
     _finish(stopped: true);
   }
 
+  /// Token native bisa datang jauh lebih cepat daripada frame UI. Buffer tetap
+  /// menerima semua token, tetapi tampilan cukup diperbarui paling banyak 20x/dtk.
+  void _scheduleReplyRender() {
+    if (_replyRenderPending || !mounted) return;
+    _replyRenderPending = true;
+    _replyRenderTimer = Timer(const Duration(milliseconds: 50), () {
+      _replyRenderPending = false;
+      _replyRenderTimer = null;
+      if (!mounted || !_streaming || _lines.isEmpty) return;
+      setState(() => _lines[_lines.length - 1] = ChatLine('assistant', _reply.toString()));
+    });
+  }
+
   void _finish({Object? error, bool stopped = false}) {
     if (!_streaming) {
       return; // onError dan onDone bisa sama-sama terpanggil; cukup satu kali
     }
     _chatSub = null;
+    _replyRenderTimer?.cancel();
+    _replyRenderTimer = null;
+    _replyRenderPending = false;
     final partial = _reply.toString();
     final last = _lines.length - 1;
+    if (last < 0) {
+      _streaming = false;
+      return;
+    }
     setState(() {
       _streaming = false;
       if (error != null) {
@@ -1265,6 +1331,24 @@ class _NeuraHomeState extends State<NeuraHome> with WidgetsBindingObserver {
               tooltip: 'Percakapan baru',
               onPressed: _streaming || _clearingChat ? null : _newConversation,
               icon: const Icon(Icons.add_comment_outlined, size: 19),
+            ),
+          ]),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 7, 10, 5),
+          child: Row(children: [
+            const Icon(Icons.swap_horiz, size: 16, color: muted),
+            const SizedBox(width: 6),
+            const Text('Model Chat', style: TextStyle(fontSize: 11, color: muted)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ModelSelector(
+                models: _localModels,
+                busy: _modelBusy,
+                locked: _streaming,
+                onSelect: _selectChatModel,
+                onRefresh: _refreshLocalModels,
+              ),
             ),
           ]),
         ),
