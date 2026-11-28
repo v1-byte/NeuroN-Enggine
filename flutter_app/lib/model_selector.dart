@@ -41,13 +41,11 @@ class ModelSelector extends StatelessWidget {
       icon: busy
           ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
           : const Icon(Icons.memory_outlined, size: 17),
-      label: Flexible(
-        child: Text(
-          busy ? 'Menyiapkan model…' : (locked ? 'Jawaban sedang berjalan…' : activeName),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 10),
-        ),
+      label: Text(
+        busy ? 'Menyiapkan model…' : (locked ? 'Jawaban sedang berjalan…' : activeName),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 10),
       ),
       style: OutlinedButton.styleFrom(
         foregroundColor: active.isEmpty ? amber : blue,

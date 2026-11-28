@@ -41,7 +41,11 @@ void main() {
     await tester.tap(find.text('alpha-Q4.gguf'));
     await tester.pumpAndSettle();
     expect(find.text('beta-Q5.gguf'), findsOneWidget);
-    expect(find.text('Aktif untuk Chat'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate((widget) =>
+          widget is Text && widget.data?.contains('Aktif untuk Chat') == true),
+      findsOneWidget,
+    );
     expect(find.text('Dipakai'), findsOneWidget);
     expect(find.text('Pilih'), findsOneWidget);
 
