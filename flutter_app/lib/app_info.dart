@@ -4,8 +4,8 @@ import 'theme.dart';
 
 // Sinkronkan dengan `version:` di pubspec.yaml dan CHANGELOG.md.
 const kAppName = 'NeuroN Engine';
-const kAppVersion = '0.3.10';
-const kAppBuild = '21';
+const kAppVersion = '0.3.11';
+const kAppBuild = '22';
 
 // Identitas "dibuat oleh". Ubah atau kosongkan di sini bila tidak diperlukan.
 const kMakerName = 'Frostbyte Technologies';

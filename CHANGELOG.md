@@ -5,6 +5,16 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/). Versi di `flut
 
 ## [Unreleased]
 
+## [0.3.11] - 2026-11-28
+
+### Ditambahkan
+- Selector model langsung di halaman Chat untuk melihat semua model GGUF terpasang, model aktif, ukuran, dan status pemakaian.
+- Model yang dipilih dimuat sebelum pesan Chat berikutnya dikirim; pergantian model dikunci saat jawaban sedang streaming.
+
+### Diperbaiki
+- Streaming jawaban Chat sekarang membatalkan subscription lama dengan aman dan membatasi rebuild UI agar token cepat terasa lebih lancar.
+- Ditambahkan widget test untuk dua model, penandaan model aktif, pemilihan model, dan penguncian selector saat streaming.
+
 ## [0.3.10] - 2026-11-27
 
 ### Ditambahkan
